@@ -1,0 +1,16 @@
+---
+# Installation offline depuis le dépôt YUM interne (VMs air-gap).
+- name: Configurer le dépôt YUM interne OTel
+  ansible.builtin.yum_repository:
+    name: otel-internal
+    description: Dépôt interne OpenTelemetry
+    baseurl: "{{ yum_repo_url }}"
+    gpgcheck: false
+    enabled: true
+  become: true
+
+- name: Installer otelcol-contrib depuis le dépôt interne
+  ansible.builtin.dnf:
+    name: "otelcol-contrib-{{ otel_version }}"
+    state: present
+  become: true

@@ -1,0 +1,15 @@
+---
+# Installation offline depuis le dépôt APT interne (VMs air-gap, aucun accès Internet).
+- name: Configurer le dépôt APT interne OTel
+  ansible.builtin.apt_repository:
+    repo: "deb [trusted=yes] {{ apt_repo_url }} stable main"
+    state: present
+    filename: otel-internal
+  become: true
+
+- name: Installer otelcol-contrib depuis le dépôt interne
+  ansible.builtin.apt:
+    name: "otelcol-contrib={{ otel_version }}"
+    state: present
+    update_cache: true
+  become: true

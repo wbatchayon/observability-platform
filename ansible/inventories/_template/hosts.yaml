@@ -1,0 +1,19 @@
+---
+# Inventaire template — copier vers inventories/<env>/ et renseigner les hôtes.
+all:
+  children:
+    linux_debian:
+      hosts:
+        vm-debian-01:
+          ansible_host: 10.0.0.0       # à renseigner
+    linux_rhel:
+      hosts:
+        vm-rhel-01:
+          ansible_host: 10.0.0.0       # à renseigner
+    windows:
+      hosts:
+        vm-win-01:
+          ansible_host: 10.0.0.0       # à renseigner
+      vars:
+        ansible_connection: winrm
+        ansible_winrm_transport: ntlm

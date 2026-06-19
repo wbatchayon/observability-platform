@@ -1,0 +1,10 @@
+---
+environment_name: staging
+package_repo_url: "https://harbor.staging.observability.internal"
+otel_version: "0.148.0"
+edge_collector_endpoint: "otlp.staging.observability.internal:4317"
+otel_tls_ca: "{{ vault_otel_tls_ca }}"
+otel_tls_cert: "{{ vault_otel_tls_cert }}"
+otel_tls_key: "{{ vault_otel_tls_key }}"
+apt_repo_url: "{{ package_repo_url }}/repository/apt-otel"
+yum_repo_url: "{{ package_repo_url }}/repository/yum-otel"

@@ -1,0 +1,46 @@
+---
+- name: Installer l'agent (Debian/Ubuntu)
+  ansible.builtin.include_tasks: install-debian.yaml
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Installer l'agent (RHEL/CentOS)
+  ansible.builtin.include_tasks: install-rhel.yaml
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Installer l'agent (Windows)
+  ansible.builtin.include_tasks: install-windows.yaml
+  when: ansible_facts['os_family'] == "Windows"
+
+- name: Déployer les certificats mTLS (Linux)
+  ansible.builtin.copy:
+    content: "{{ item.content }}"
+    dest: "{{ otel_tls_dir_linux }}/{{ item.name }}"
+    owner: otelcol
+    group: otelcol
+    mode: "0640"
+  loop:
+    - {name: ca.crt, content: "{{ otel_tls_ca }}"}
+    - {name: tls.crt, content: "{{ otel_tls_cert }}"}
+    - {name: tls.key, content: "{{ otel_tls_key }}"}
+  no_log: true
+  become: true
+  when: ansible_facts['system'] == "Linux"
+  notify: Redémarrer otelcol (Linux)
+
+- name: Générer la configuration OTel (Linux)
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ otel_config_path_linux }}"
+    owner: otelcol
+    group: otelcol
+    mode: "0640"
+  become: true
+  when: ansible_facts['system'] == "Linux"
+  notify: Redémarrer otelcol (Linux)
+
+- name: Générer la configuration OTel (Windows)
+  ansible.windows.win_template:
+    src: config.yaml.j2
+    dest: "{{ otel_config_path_windows }}"
+  when: ansible_facts['os_family'] == "Windows"
+  notify: Redémarrer otelcol (Windows)

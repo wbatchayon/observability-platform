@@ -1,0 +1,33 @@
+---
+- name: Détecter la famille d'OS
+  ansible.builtin.debug:
+    msg: "OS détecté : {{ ansible_facts['os_family'] }} ({{ ansible_facts['distribution'] }})"
+
+- name: Créer l'utilisateur de service otel (Linux)
+  ansible.builtin.user:
+    name: otelcol
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+  when: ansible_facts['system'] == "Linux"
+  become: true
+
+- name: Créer le répertoire de configuration (Linux)
+  ansible.builtin.file:
+    path: /etc/otelcol-contrib
+    state: directory
+    owner: otelcol
+    group: otelcol
+    mode: "0750"
+  when: ansible_facts['system'] == "Linux"
+  become: true
+
+- name: Créer le répertoire de queue persistante (Linux)
+  ansible.builtin.file:
+    path: /var/lib/otelcol/queue
+    state: directory
+    owner: otelcol
+    group: otelcol
+    mode: "0750"
+  when: ansible_facts['system'] == "Linux"
+  become: true

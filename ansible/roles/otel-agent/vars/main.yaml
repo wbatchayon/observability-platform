@@ -1,0 +1,4 @@
+---
+# Variables partagées du rôle otel-agent (les spécificités OS sont gérées par conditions
+# ansible_facts['os_family'] dans les tasks et le template).
+otel_package_name: otelcol-contrib

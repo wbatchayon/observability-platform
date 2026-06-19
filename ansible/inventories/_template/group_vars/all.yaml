@@ -1,0 +1,19 @@
+---
+# Variables communes — surface de configuration des agents (par environnement).
+environment_name: _template
+
+# Dépôt interne (output de bootstrap/30-package-repo). Les VMs sont air-gap.
+package_repo_url: "https://harbor.observability.internal"
+otel_version: "0.148.0"
+
+# Endpoint de l'Edge Collector du DC (exposé via ingress/). Export OTLP/gRPC mTLS.
+edge_collector_endpoint: "otlp.observability.internal:4317"
+
+# Certificats mTLS de l'agent (fournis via ansible-vault / SOPS, jamais en clair).
+otel_tls_ca: "{{ vault_otel_tls_ca }}"
+otel_tls_cert: "{{ vault_otel_tls_cert }}"
+otel_tls_key: "{{ vault_otel_tls_key }}"
+
+# Apt/yum repo interne (miroir des packages OTel).
+apt_repo_url: "{{ package_repo_url }}/repository/apt-otel"
+yum_repo_url: "{{ package_repo_url }}/repository/yum-otel"

@@ -1,0 +1,18 @@
+---
+all:
+  children:
+    linux_debian:
+      hosts:
+        prod-debian-01:
+          ansible_host: 10.30.1.11
+    linux_rhel:
+      hosts:
+        prod-rhel-01:
+          ansible_host: 10.30.1.21
+    windows:
+      hosts:
+        prod-win-01:
+          ansible_host: 10.30.1.31
+      vars:
+        ansible_connection: winrm
+        ansible_winrm_transport: ntlm
