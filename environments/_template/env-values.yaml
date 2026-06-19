@@ -1,0 +1,45 @@
+---
+# ConfigMap `env-values` — toutes les variables NON sensibles injectées par Flux (postBuild
+# substituteFrom) dans les manifests platform/. C'est ici qu'on adapte un environnement.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: env-values
+  namespace: flux-system
+data:
+  # --- Global ---
+  ENVIRONMENT: "REMPLACEZ"          # dev | staging | prod
+  TENANT_ID: "observability"
+  VAULT_ADDR: "https://vault.vault.svc.cluster.local:8200"
+
+  # --- Stockage (MinIO) ---
+  MINIO_REPLICAS: "4"
+  MINIO_VOLUME_SIZE: "200Gi"
+
+  # --- Backends ---
+  LOKI_RETENTION: "720h"            # 30j
+  LOKI_INGESTER_REPLICAS: "3"
+  MIMIR_RETENTION: "8760h"          # 1 an
+  MIMIR_INGESTER_REPLICAS: "3"
+  TEMPO_RETENTION: "336h"           # 14j
+  TEMPO_INGESTER_REPLICAS: "3"
+
+  # --- Ingestion ---
+  OTEL_GATEWAY_REPLICAS: "3"
+  OTEL_EDGE_REPLICAS: "1"
+  TRACE_SAMPLING_PERCENT: "10"
+
+  # --- Monitoring ---
+  PROMETHEUS_RETENTION: "15d"
+
+  # --- Visualisation (Grafana) ---
+  GRAFANA_DOMAIN: "grafana.observability.internal"
+  GRAFANA_OAUTH_ENABLED: "false"
+  GRAFANA_OAUTH_CLIENT_ID: "REMPLACEZ"
+  GRAFANA_OAUTH_AUTH_URL: "https://sso.example.com/authorize"
+  GRAFANA_OAUTH_TOKEN_URL: "https://sso.example.com/token"
+  GRAFANA_OAUTH_API_URL: "https://sso.example.com/userinfo"
+  GRAFANA_ADMIN_USER: "admin"
+
+  # --- Ingress ---
+  OTLP_DOMAIN: "otlp.observability.internal"
