@@ -1,0 +1,26 @@
+---
+# Route HTTPS publique -> Grafana.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: ingress
+  annotations:
+    haproxy.org/server-ssl: "true"
+    haproxy.org/load-balance: "leastconn"
+spec:
+  ingressClassName: haproxy
+  tls:
+    - hosts: ["${GRAFANA_DOMAIN}"]
+      secretName: grafana-tls
+  rules:
+    - host: ${GRAFANA_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 443

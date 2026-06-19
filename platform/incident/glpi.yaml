@@ -1,0 +1,113 @@
+---
+# Base de données GLPI.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: glpi-db
+  namespace: incident
+type: Opaque
+stringData:
+  mysql-root-password: ${GLPI_DB_ROOT_PASSWORD}
+  mysql-password: ${GLPI_DB_PASSWORD}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: glpi-mariadb
+  namespace: incident
+spec:
+  serviceName: glpi-mariadb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: glpi-mariadb
+  template:
+    metadata:
+      labels:
+        app: glpi-mariadb
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+      containers:
+        - name: mariadb
+          image: mariadb:11.4
+          env:
+            - name: MARIADB_DATABASE
+              value: glpi
+            - name: MARIADB_USER
+              value: glpi
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: glpi-db
+                  key: mysql-password
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: glpi-db
+                  key: mysql-root-password
+          ports:
+            - containerPort: 3306
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 250m
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: glpi
+  namespace: incident
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: glpi
+  template:
+    metadata:
+      labels:
+        app: glpi
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: glpi
+          image: diouxx/glpi:10.0.15
+          env:
+            - name: TIMEZONE
+              value: Europe/Paris
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 100m
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: glpi
+  namespace: incident
+spec:
+  selector:
+    app: glpi
+  ports:
+    - port: 80
+      targetPort: 80
