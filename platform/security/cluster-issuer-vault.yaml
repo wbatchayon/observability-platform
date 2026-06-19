@@ -1,0 +1,17 @@
+---
+# ClusterIssuer adossé à la PKI Vault — émetteur des certificats mTLS de toute la plateforme.
+# Les valeurs ${VAULT_ADDR} sont injectées par Flux postBuild depuis environments/<env>.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-issuer
+spec:
+  vault:
+    server: ${VAULT_ADDR}
+    path: pki_int/sign/observability
+    auth:
+      kubernetes:
+        role: cert-manager
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef:
+          name: cert-manager

@@ -1,0 +1,51 @@
+---
+# Durcissement des pods : non-root, pas de tag :latest, ressources obligatoires, labels requis.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: pod-hardening
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "L'usage du tag ':latest' (ou tag absent) est interdit."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+    - name: require-run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Les conteneurs doivent s'exécuter en non-root."
+        pattern:
+          spec:
+            =(securityContext):
+              =(runAsNonRoot): true
+            containers:
+              - =(securityContext):
+                  =(runAsNonRoot): true
+    - name: require-resources
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "requests et limits CPU/mémoire sont obligatoires."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    memory: "?*"
+                    cpu: "?*"
+                  limits:
+                    memory: "?*"

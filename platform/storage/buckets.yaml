@@ -1,0 +1,48 @@
+---
+# Job de provisioning des buckets (loki, mimir, tempo) avec versioning, via le client mc.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-make-buckets
+  namespace: storage
+  annotations:
+    # Rejoué à chaque réconciliation Flux si nécessaire (idempotent : mc mb --ignore-existing).
+    kustomize.toolkit.fluxcd.io/force: enabled
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: mc
+          image: minio/mc:RELEASE.2024-04-29T09-56-05Z
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              mc alias set minio https://minio.storage.svc.cluster.local:9000 "$ACCESS_KEY" "$SECRET_KEY"
+              for b in loki mimir tempo; do
+                mc mb --ignore-existing "minio/$b"
+                mc version enable "minio/$b"
+              done
+          env:
+            - name: ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: accesskey
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: secretkey
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 50m
+            limits:
+              memory: 128Mi

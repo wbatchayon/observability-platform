@@ -1,0 +1,24 @@
+---
+# Exige que les images proviennent du registre interne et soient signées (Cosign).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signatures
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: verify-signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [backends, ingestion, monitoring, visualization, storage, incident]
+      verifyImages:
+        - imageReferences:
+            - "harbor.observability.internal/*"
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/org/observability-platform/*"
+                    issuer: "https://token.actions.githubusercontent.com"
