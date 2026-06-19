@@ -1,0 +1,37 @@
+---
+# Auto-healing : nettoyage automatique des pods en échec (Kyverno CleanupPolicy).
+apiVersion: kyverno.io/v2beta1
+kind: ClusterCleanupPolicy
+metadata:
+  name: cleanup-failed-pods
+spec:
+  match:
+    any:
+      - resources:
+          kinds: [Pod]
+          namespaces: [backends, ingestion, monitoring, visualization, storage]
+  conditions:
+    any:
+      - key: "{{ target.status.phase }}"
+        operator: Equals
+        value: Failed
+  schedule: "*/15 * * * *"
+---
+# Auto-scaling de l'ingestion sur saturation de la file (KEDA).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: otel-gateway-scaler
+  namespace: ingestion
+spec:
+  scaleTargetRef:
+    name: otel-gateway
+  minReplicaCount: ${OTEL_GATEWAY_REPLICAS}
+  maxReplicaCount: 10
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-operated.monitoring.svc.cluster.local:9090
+        metricName: otelcol_exporter_queue_size
+        threshold: "5000"
+        query: sum(otelcol_exporter_queue_size)

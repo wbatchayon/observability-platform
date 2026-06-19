@@ -1,0 +1,48 @@
+---
+# Configuration Alertmanager : groupement, inhibition, routage par sévérité vers OneUptime.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: observability-routing
+  namespace: monitoring
+spec:
+  route:
+    groupBy: ["alertname", "namespace", "severity"]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    receiver: oneuptime-warning
+    routes:
+      - matchers:
+          - name: severity
+            value: critical
+        receiver: oneuptime-critical
+      - matchers:
+          - name: severity
+            value: warning
+        receiver: oneuptime-warning
+      - matchers:
+          - name: severity
+            value: info
+        receiver: oneuptime-info
+  inhibitRules:
+    - sourceMatch:
+        - name: severity
+          value: critical
+      targetMatch:
+        - name: severity
+          value: warning
+      equal: ["alertname", "namespace"]
+  receivers:
+    - name: oneuptime-critical
+      webhookConfigs:
+        - url: http://oneuptime.incident.svc.cluster.local/api/alertmanager-webhook
+          sendResolved: true
+    - name: oneuptime-warning
+      webhookConfigs:
+        - url: http://oneuptime.incident.svc.cluster.local/api/alertmanager-webhook
+          sendResolved: true
+    - name: oneuptime-info
+      webhookConfigs:
+        - url: http://oneuptime.incident.svc.cluster.local/api/alertmanager-webhook
+          sendResolved: false
