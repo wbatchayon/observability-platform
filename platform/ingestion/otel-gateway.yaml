@@ -6,7 +6,8 @@ metadata:
   namespace: ingestion
 spec:
   interval: 1h
-  url: https://open-telemetry.github.io/opentelemetry-helm-charts
+  type: oci
+  url: oci://${HARBOR_REGISTRY}/charts
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease

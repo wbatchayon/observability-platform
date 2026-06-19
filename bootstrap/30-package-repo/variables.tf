@@ -37,3 +37,15 @@ variable "retention_days" {
   type        = number
   default     = 90
 }
+
+variable "robot_token_rotation_days" {
+  description = "Durée de vie + intervalle de rotation du token du compte robot read-only (jours)."
+  type        = number
+  default     = 90
+}
+
+variable "charts_seed_dir" {
+  description = "Répertoire local contenant les charts Helm seedés hors-ligne pour l'amorçage air-gap (Harbor)."
+  type        = string
+  default     = "./charts-seed"
+}

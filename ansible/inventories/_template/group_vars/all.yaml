@@ -17,3 +17,4 @@ otel_tls_key: "{{ vault_otel_tls_key }}"
 # Apt/yum repo interne (miroir des packages OTel).
 apt_repo_url: "{{ package_repo_url }}/repository/apt-otel"
 yum_repo_url: "{{ package_repo_url }}/repository/yum-otel"
+otel_repo_gpg_key_url: "{{ package_repo_url }}/repository/otel-gpg/otel-internal.asc"

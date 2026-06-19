@@ -18,7 +18,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: mc
-          image: minio/mc:RELEASE.2024-04-29T09-56-05Z
+          image: ${HARBOR_REGISTRY}/library/minio/mc:RELEASE.2024-04-29T09-56-05Z
           command:
             - /bin/sh
             - -c

@@ -37,3 +37,17 @@ Liste alignée sur `VM_Configuration/Docs/Markdown/specification_packages_otel.m
 | `robot_account_name` | compte read-only utilisé par les VMs |
 
 Les VMs accèdent **en read-only** via le compte robot `vm-pull`.
+
+## Rotation du token robot
+
+Le token du compte robot a une **durée de vie bornée** (`robot_token_rotation_days`, défaut 90j).
+La ressource `time_rotating` force la **régénération automatique** du compte (et donc du token) à
+chaque intervalle : un `terraform apply` après l'échéance recrée le robot avec un nouveau secret.
+
+```bash
+# Rotation (après échéance) + récupération du nouveau token
+terraform apply -var-file=../../environments/<env>/30-package-repo.tfvars
+terraform output -raw robot_account_secret   # à re-chiffrer dans le vault Ansible/SOPS
+```
+
+Le nouveau token doit être propagé aux VMs via `ansible-playbook ... configure-agent.yaml`.

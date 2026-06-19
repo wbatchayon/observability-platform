@@ -13,10 +13,17 @@ resource "harbor_project" "otel_packages" {
 }
 
 # Compte robot read-only : utilisé par les VMs (via Ansible) pour tirer les packages.
+# Le token a une durée de vie bornée (rotation) — voir robot_token_rotation_days.
+resource "time_rotating" "robot" {
+  rotation_days = var.robot_token_rotation_days
+}
+
 resource "harbor_robot_account" "vm_pull" {
   name        = "vm-pull"
   description = "Compte read-only pour les VMs air-gap (pull des packages OTel)"
   level       = "project"
+  # Expiration bornée ; la rotation force la regénération du token.
+  duration = var.robot_token_rotation_days
 
   permissions {
     access {
@@ -25,6 +32,10 @@ resource "harbor_robot_account" "vm_pull" {
     }
     kind      = "project"
     namespace = harbor_project.otel_packages.name
+  }
+
+  lifecycle {
+    replace_triggered_by = [time_rotating.robot.id]
   }
 }
 

@@ -1,11 +1,18 @@
 ---
-# Installation offline depuis le dépôt YUM interne (VMs air-gap).
-- name: Configurer le dépôt YUM interne OTel
+# Installation offline depuis le dépôt YUM interne SIGNÉ (VMs air-gap).
+- name: Importer la clé GPG du dépôt interne
+  ansible.builtin.rpm_key:
+    key: "{{ otel_repo_gpg_key_url }}"
+    state: present
+  become: true
+
+- name: Configurer le dépôt YUM interne OTel (vérification GPG activée)
   ansible.builtin.yum_repository:
     name: otel-internal
     description: Dépôt interne OpenTelemetry
     baseurl: "{{ yum_repo_url }}"
-    gpgcheck: false
+    gpgcheck: true
+    gpgkey: "{{ otel_repo_gpg_key_url }}"
     enabled: true
   become: true
 

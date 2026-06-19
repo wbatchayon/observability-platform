@@ -16,11 +16,13 @@ resource "kubernetes_namespace" "harbor" {
 }
 
 resource "helm_release" "harbor" {
-  name       = "harbor"
-  namespace  = kubernetes_namespace.harbor.metadata[0].name
-  repository = "https://helm.goharbor.io"
-  chart      = "harbor"
-  version    = "1.14.0"
+  name      = "harbor"
+  namespace = kubernetes_namespace.harbor.metadata[0].name
+  # Amorçage air-gap : Harbor est le registre lui-même, son chart NE PEUT PAS venir de Harbor.
+  # Il est installé depuis une archive de chart seedée hors-ligne (cf. README "Amorçage air-gap").
+  # Ses images sont préchargées dans containerd des nœuds via `ctr image import` (seed).
+  chart   = "${var.charts_seed_dir}/harbor"
+  version = "1.14.0"
 
   values = [yamlencode({
     externalURL         = var.harbor_url

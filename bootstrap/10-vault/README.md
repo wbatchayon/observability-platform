@@ -7,19 +7,37 @@ pour les humains).
 ## Prérequis
 
 - Cluster provisionné (`bootstrap/00-cluster`) → `kubeconfig`.
-- Après `helm_release.vault`, Vault doit être **initialisé et descellé** (init/unseal) avant
-  d'appliquer la PKI/auth (le provider `vault` nécessite `VAULT_TOKEN`). En production, utiliser
-  l'**auto-unseal** (Transit/KMS) — documenté ci-dessous.
+- Chart et images Vault servis depuis **Harbor** (OCI) — aucun accès Internet.
+- **Auto-unseal Transit** activé par défaut : un Vault de bootstrap (interne, air-gap) expose un
+  moteur `transit/` avec une clé d'unseal. Vault se descelle automatiquement au démarrage.
+
+## Auto-unseal (Transit, air-gap)
+
+Plutôt qu'un KMS cloud (interdit en air-gap), on utilise le **seal Transit** :
+
+1. Un petit Vault de bootstrap (ou un cluster Vault dédié) active le moteur `transit` et crée une
+   clé (`transit_unseal_key_name`).
+2. Un token avec une policy restreinte (`encrypt`/`decrypt` sur cette clé) est fourni au Vault
+   principal via le secret Kubernetes `vault-transit-unseal` (clé `token`, injectée depuis SOPS).
+3. Le CA TLS du Vault de bootstrap est monté via le secret `transit-tls`.
+
+Création du secret (token déchiffré de SOPS) :
+
+```bash
+kubectl -n vault create secret generic vault-transit-unseal \
+  --from-literal=token="$VAULT_TRANSIT_TOKEN"
+```
 
 ## Séquence
 
 ```bash
 terraform init
+# 0. Créer le secret du token Transit (auto-unseal)
+kubectl -n vault create secret generic vault-transit-unseal --from-literal=token="$VAULT_TRANSIT_TOKEN"
 # 1. Déployer Vault uniquement
 terraform apply -target=helm_release.vault -var-file=../../environments/dev/10-vault.tfvars
-# 2. Initialiser/desceller (à automatiser via auto-unseal en prod)
+# 2. Initialiser (le descellement est AUTOMATIQUE via Transit)
 kubectl -n vault exec -it vault-0 -- vault operator init
-kubectl -n vault exec -it vault-0 -- vault operator unseal
 export VAULT_TOKEN=<root-or-admin-token>
 # 3. Appliquer PKI + auth
 terraform apply -var-file=../../environments/dev/10-vault.tfvars

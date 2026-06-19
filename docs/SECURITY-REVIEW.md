@@ -29,22 +29,30 @@ visualization→backends/monitoring, monitoring→scrape, intra-ingestion).
 - Kyverno (Enforce) : images signées (cosign), interdiction `:latest`, non-root, requests/limits.
 - Pod Security Standards `restricted` sur les namespaces de données.
 
-### 🟡 Air-gap repo APT/YUM : vérification de signature
-`install-debian.yaml` utilise `[trusted=yes]` et `install-rhel.yaml` `gpgcheck=false`.
-**Acceptable** car dépôt interne sur réseau privé + import contrôlé (checksums + GPG à l'import dans
-Harbor). **Recommandation** : signer le dépôt interne et activer `gpgcheck` pour une défense en
-profondeur.
+### 🟢 Corrigé — Air-gap repo APT/YUM : vérification de signature
+`install-debian.yaml` utilise désormais `signed-by=` avec import de la clé GPG interne (plus de
+`[trusted=yes]`) ; `install-rhel.yaml` active `gpgcheck=true` + `gpgkey`. Clé servie par le dépôt
+interne (`otel_repo_gpg_key_url`).
 
-### 🟡 Vault auto-unseal
-Le descellement est manuel par défaut (documenté). **Recommandation prod** : activer l'auto-unseal
-(Transit/KMS) pour éviter l'exposition des clés d'unseal.
+### 🟢 Corrigé — Vault auto-unseal
+Auto-unseal **Transit** activé par défaut (`seal "transit"` dans la config Raft), adapté à
+l'air-gap (pas de KMS cloud). Token Transit injecté via secret K8s `vault-transit-unseal` (SOPS).
 
-### 🟡 Harbor robot account / rétention
-Compte robot read-only pour les VMs : OK. **Recommandation** : rotation périodique du token robot.
+### 🟢 Corrigé — Rotation du token robot Harbor
+`harbor_robot_account` borné par `duration` + `time_rotating` (`robot_token_rotation_days`, 90j) :
+la rotation regénère automatiquement le token. Nouveau secret exposé en output (à re-chiffrer SOPS)
+et propagé aux VMs via `configure-agent.yaml`.
+
+### 🟢 Air-gap : aucune communication directe avec Internet
+- **Miroir containerd → Harbor** sur chaque nœud (docker.io/quay.io/ghcr.io/registry.k8s.io).
+- **Charts Helm en OCI depuis Harbor** (`oci://${HARBOR_REGISTRY}/charts`) — plus aucun dépôt public.
+- Images explicites préfixées `${HARBOR_REGISTRY}/library/`.
+- Amorçage Harbor-first depuis archives locales (cf. `docs/how-it-works/air-gap.md`).
 
 ## Couverture CI (bloquante)
 `gitleaks`, `trivy` (config + secrets), `checkov`, `tfsec`, `kubescape`, `conftest`/OPA, SBOM
 (syft) + signature `cosign`. À exécuter sur chaque PR.
 
 ## Verdict
-Prêt pour intégration. Traiter les points 🟡 avant la mise en production.
+Prêt pour intégration. Tous les constats sont traités (mTLS, secrets, deny-by-default, signature
+des dépôts, auto-unseal, rotation de token, air-gap complet via Harbor).

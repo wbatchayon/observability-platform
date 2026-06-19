@@ -5,10 +5,52 @@ locals {
   first_cp     = var.control_plane_nodes[0]
   join_token   = "" # généré dynamiquement sur le control-plane (voir remote-exec)
   cni_manifest = var.cni == "calico" ? "calico.yaml" : "cilium.yaml"
+  all_nodes    = concat(var.control_plane_nodes, var.worker_nodes)
+  # Registres publics redirigés vers le miroir Harbor interne (air-gap).
+  mirrored_registries = ["docker.io", "quay.io", "ghcr.io", "registry.k8s.io"]
+}
+
+# 0. Configure containerd sur CHAQUE nœud pour rediriger tous les registres publics vers Harbor.
+#    Garantit qu'aucune image n'est tirée depuis Internet.
+resource "null_resource" "containerd_mirror" {
+  for_each = var.registry_mirror != "" ? { for n in local.all_nodes : n.name => n } : {}
+
+  triggers = {
+    node_ip = each.value.ip
+    mirror  = var.registry_mirror
+  }
+
+  connection {
+    type        = "ssh"
+    host        = each.value.ip
+    user        = var.ssh_user
+    private_key = file(var.ssh_private_key_path)
+  }
+
+  provisioner "remote-exec" {
+    inline = concat(
+      ["set -e", "sudo mkdir -p /etc/containerd/certs.d"],
+      flatten([
+        for reg in local.mirrored_registries : [
+          "sudo mkdir -p /etc/containerd/certs.d/${reg}",
+          "echo 'server = \"https://${var.registry_mirror}\"' | sudo tee /etc/containerd/certs.d/${reg}/hosts.toml",
+          "echo '[host.\"https://${var.registry_mirror}\"]' | sudo tee -a /etc/containerd/certs.d/${reg}/hosts.toml",
+          "echo '  capabilities = [\"pull\", \"resolve\"]' | sudo tee -a /etc/containerd/certs.d/${reg}/hosts.toml",
+          "echo '  override_path = true' | sudo tee -a /etc/containerd/certs.d/${reg}/hosts.toml",
+        ]
+      ]),
+      [
+        "sudo sed -i 's#config_path = \"\"#config_path = \"/etc/containerd/certs.d\"#' /etc/containerd/config.toml || true",
+        "sudo systemctl restart containerd",
+      ]
+    )
+  }
 }
 
 # 1. Initialisation du premier nœud control-plane.
 resource "null_resource" "control_plane_init" {
+  depends_on = [null_resource.containerd_mirror]
+
   triggers = {
     cluster_name = var.cluster_name
     k8s_version  = var.kubernetes_version
@@ -66,7 +108,7 @@ resource "null_resource" "fetch_kubeconfig" {
 # 3. Jonction des workers.
 resource "null_resource" "worker_join" {
   for_each   = { for n in var.worker_nodes : n.name => n }
-  depends_on = [null_resource.control_plane_init]
+  depends_on = [null_resource.control_plane_init, null_resource.containerd_mirror]
 
   triggers = {
     node_ip = each.value.ip

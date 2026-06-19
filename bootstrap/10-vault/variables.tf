@@ -20,6 +20,23 @@ variable "vault_replicas" {
   default     = 3
 }
 
+variable "harbor_registry" {
+  description = "Registre interne Harbor (host) servant images et charts OCI — aucun accès Internet."
+  type        = string
+  default     = "harbor.observability.internal"
+}
+
+variable "transit_unseal_address" {
+  description = "Adresse du Vault de bootstrap exposant le moteur Transit pour l'auto-unseal (interne)."
+  type        = string
+}
+
+variable "transit_unseal_key_name" {
+  description = "Nom de la clé Transit utilisée pour l'auto-unseal."
+  type        = string
+  default     = "vault-unseal"
+}
+
 variable "pki_common_name" {
   description = "Common Name de la CA racine PKI (ex: observability.internal)."
   type        = string

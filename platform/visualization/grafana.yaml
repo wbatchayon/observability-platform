@@ -6,7 +6,8 @@ metadata:
   namespace: visualization
 spec:
   interval: 1h
-  url: https://grafana.github.io/helm-charts
+  type: oci
+  url: oci://${HARBOR_REGISTRY}/charts
 ---
 # Identifiants admin injectés depuis le secret env (SOPS).
 apiVersion: v1

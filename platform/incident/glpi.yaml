@@ -31,7 +31,7 @@ spec:
         runAsUser: 999
       containers:
         - name: mariadb
-          image: mariadb:11.4
+          image: ${HARBOR_REGISTRY}/library/mariadb:11.4
           env:
             - name: MARIADB_DATABASE
               value: glpi
@@ -87,7 +87,7 @@ spec:
         runAsUser: 1000
       containers:
         - name: glpi
-          image: diouxx/glpi:10.0.15
+          image: ${HARBOR_REGISTRY}/library/diouxx/glpi:10.0.15
           env:
             - name: TIMEZONE
               value: Europe/Paris

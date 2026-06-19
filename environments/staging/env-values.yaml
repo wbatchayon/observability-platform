@@ -8,6 +8,7 @@ data:
   ENVIRONMENT: "staging"
   TENANT_ID: "observability"
   VAULT_ADDR: "https://vault.vault.svc.cluster.local:8200"
+  HARBOR_REGISTRY: "harbor.observability.internal"
   MINIO_REPLICAS: "4"
   MINIO_VOLUME_SIZE: "100Gi"
   LOKI_RETENTION: "336h"

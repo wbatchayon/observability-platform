@@ -11,6 +11,7 @@ data:
   ENVIRONMENT: "REMPLACEZ"          # dev | staging | prod
   TENANT_ID: "observability"
   VAULT_ADDR: "https://vault.vault.svc.cluster.local:8200"
+  HARBOR_REGISTRY: "harbor.observability.internal"
 
   # --- Stockage (MinIO) ---
   MINIO_REPLICAS: "4"

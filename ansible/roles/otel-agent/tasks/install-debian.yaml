@@ -1,8 +1,22 @@
 ---
-# Installation offline depuis le dépôt APT interne (VMs air-gap, aucun accès Internet).
-- name: Configurer le dépôt APT interne OTel
+# Installation offline depuis le dépôt APT interne SIGNÉ (VMs air-gap, aucun accès Internet).
+- name: Créer le répertoire des clés APT
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+  become: true
+
+- name: Importer la clé GPG du dépôt interne (servie par Harbor/Nexus interne)
+  ansible.builtin.get_url:
+    url: "{{ otel_repo_gpg_key_url }}"
+    dest: /etc/apt/keyrings/otel-internal.asc
+    mode: "0644"
+  become: true
+
+- name: Configurer le dépôt APT interne OTel (signé)
   ansible.builtin.apt_repository:
-    repo: "deb [trusted=yes] {{ apt_repo_url }} stable main"
+    repo: "deb [signed-by=/etc/apt/keyrings/otel-internal.asc] {{ apt_repo_url }} stable main"
     state: present
     filename: otel-internal
   become: true

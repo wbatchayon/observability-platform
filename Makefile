@@ -5,7 +5,9 @@
 
 ENV ?= dev
 ENV_DIR := environments/$(ENV)
-BOOTSTRAP_DIRS := bootstrap/00-cluster bootstrap/10-vault bootstrap/20-flux bootstrap/30-package-repo
+# Ordre d'amorçage air-gap : cluster -> Harbor (registre, seedé) -> Vault -> Flux.
+# Harbor passe avant Vault car il sert ensuite images et charts à tout le reste.
+BOOTSTRAP_DIRS := bootstrap/00-cluster bootstrap/30-package-repo bootstrap/10-vault bootstrap/20-flux
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
