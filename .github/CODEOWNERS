@@ -1,0 +1,29 @@
+# Propriétaires par dossier — revue automatique sur les PR.
+# Remplacez les équipes par vos vrais groupes GitHub.
+
+# Par défaut
+*                       @infra-team
+
+# Socle / Terraform
+/bootstrap/             @infra-team @platform-team
+/bootstrap/10-vault/    @security-team
+
+# Plateforme
+/platform/security/     @security-team
+/platform/storage/      @platform-team
+/platform/backends/     @observability-team
+/platform/ingestion/    @observability-team
+/platform/monitoring/   @observability-team
+/platform/visualization/ @observability-team
+/platform/incident/     @sre-team
+
+# Réseau / VMs
+/ingress/               @network-team @platform-team
+/ansible/               @infra-team
+
+# CI/CD et conventions
+/.github/               @platform-team @security-team
+/ci/                    @platform-team
+
+# Documentation
+/docs/                  @observability-team

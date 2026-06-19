@@ -1,0 +1,21 @@
+---
+name: Release
+
+"on":
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Versioning sémantique + changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release Please (conventional commits -> SemVer + CHANGELOG)
+        uses: googleapis/release-please-action@v4
+        with:
+          release-type: simple
+          package-name: observability-platform
