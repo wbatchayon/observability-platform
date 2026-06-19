@@ -23,14 +23,14 @@ resource "helm_release" "harbor" {
   version    = "1.14.0"
 
   values = [yamlencode({
-    externalURL    = var.harbor_url
+    externalURL         = var.harbor_url
     harborAdminPassword = var.harbor_admin_password
     expose = {
       type = "ingress"
       tls = {
-        enabled = true
+        enabled    = true
         certSource = "secret"
-        secret = { secretName = "harbor-tls" }
+        secret     = { secretName = "harbor-tls" }
       }
       ingress = {
         hosts = { core = replace(var.harbor_url, "https://", "") }

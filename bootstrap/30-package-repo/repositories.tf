@@ -35,13 +35,15 @@ resource "harbor_retention_policy" "otel" {
 
   rule {
     most_recently_pulled = 10
-    untagged             = true
+    repo_matching        = "**"
+    tag_matching         = "**"
+    untagged_artifacts   = true
   }
 }
 
 # Immutabilité des tags de release (ex: la version OTel figée).
 resource "harbor_immutable_tag_rule" "releases" {
-  project_id     = harbor_project.otel_packages.id
-  tag_matching   = var.otel_version
-  repo_matching  = "**"
+  project_id    = harbor_project.otel_packages.id
+  tag_matching  = var.otel_version
+  repo_matching = "**"
 }

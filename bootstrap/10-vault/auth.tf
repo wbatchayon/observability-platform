@@ -32,13 +32,13 @@ resource "vault_kubernetes_auth_backend_role" "observability" {
 
 # 2. Auth LDAP/AD pour les accès humains.
 resource "vault_ldap_auth_backend" "ldap" {
-  path      = "ldap"
-  url       = var.ldap_url
-  userdn    = var.ldap_userdn
-  groupdn   = var.ldap_groupdn
-  binddn    = var.ldap_binddn
-  bindpass  = var.ldap_bindpass
-  starttls  = true
+  path     = "ldap"
+  url      = var.ldap_url
+  userdn   = var.ldap_userdn
+  groupdn  = var.ldap_groupdn
+  binddn   = var.ldap_binddn
+  bindpass = var.ldap_bindpass
+  starttls = true
 }
 
 # Mapping groupe LDAP -> policy Vault.
