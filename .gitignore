@@ -1,0 +1,30 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars.local
+.terraform.lock.hcl.local
+
+# Secrets (jamais en clair — uniquement chiffrés SOPS)
+*.dec.yaml
+*.decrypted.*
+age.key
+*.agekey
+secrets.plain.*
+
+# Ansible
+*.retry
+ansible/inventories/**/host_vars/**/vault.local
+
+# OS / éditeurs
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Build / artefacts
+dist/
+*.sbom.json
+*.tmp
