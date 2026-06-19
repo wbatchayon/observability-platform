@@ -1,0 +1,23 @@
+flowchart TB
+  subgraph PKI["Vault PKI (mTLS)"]
+    ROOT["CA racine"]
+    INT["CA intermédiaire\npki_int/sign/observability"]
+    ROOT --> INT
+  end
+  CM["cert-manager\nClusterIssuer: vault-issuer"]
+  INT --> CM
+  CM -->|Certificate| AGENT["Agent OTel"]
+  CM -->|Certificate| EDGE["Edge Collector"]
+  CM -->|Certificate| GW["OTel Gateway"]
+  CM -->|Certificate| BK["Loki/Mimir/Tempo"]
+  CM -->|Certificate| GF["Grafana"]
+
+  AGENT ==>|mTLS| EDGE
+  EDGE ==>|mTLS| GW
+  GW ==>|mTLS| BK
+
+  subgraph GUARD["Garde-fous cluster"]
+    NP["NetworkPolicies deny-by-default"]
+    KY["Kyverno: images signées, non-root, limits"]
+    RB["RBAC strict"]
+  end

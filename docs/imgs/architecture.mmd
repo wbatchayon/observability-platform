@@ -1,0 +1,64 @@
+flowchart LR
+  subgraph VMS["VMs (air-gap)"]
+    OTEL["Agent OTel\n(.deb/.rpm/.tar.gz)"]
+  end
+
+  subgraph EDGE["Edge Collectors (par DC)"]
+    E1["Edge DC1"]
+    E2["Edge DC2"]
+    E3["Edge DC3"]
+  end
+
+  subgraph PE["Ingress (HAProxy + TLS)"]
+    LB["HAProxy x2 (active/active)"]
+  end
+
+  subgraph K8S["Cluster Kubernetes"]
+    subgraph ING["ns: ingestion"]
+      GW["OTel Gateway x3\nfilter/batch/enrich/sampling/queues"]
+    end
+    subgraph BK["ns: backends"]
+      L["Loki"]
+      M["Mimir"]
+      T["Tempo"]
+    end
+    subgraph ST["ns: storage"]
+      S3["MinIO (S3)"]
+    end
+    subgraph MON["ns: monitoring"]
+      P["Prometheus"]
+      AM["Alertmanager"]
+    end
+    subgraph VIS["ns: visualization"]
+      GF["Grafana"]
+    end
+    subgraph SEC["ns: security"]
+      CM["cert-manager + Vault PKI"]
+      KY["Kyverno"]
+    end
+  end
+
+  subgraph INC["ns: incident"]
+    OU["OneUptime"]
+    GL["GLPI"]
+    NT["Notifications"]
+  end
+
+  OTEL -->|OTLP/mTLS| EDGE
+  EDGE -->|OTLP/mTLS| LB
+  LB --> GW
+  GW -->|logs| L
+  GW -->|metrics| M
+  GW -->|traces| T
+  L --> S3
+  M --> S3
+  T --> S3
+  L --> GF
+  M --> GF
+  T --> GF
+  P --> AM
+  AM --> OU
+  OU --> GL
+  OU --> NT
+  CM -.->|mTLS certs| GW
+  CM -.->|mTLS certs| BK

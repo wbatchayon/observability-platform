@@ -1,0 +1,7 @@
+flowchart LR
+  DEV["Développeur"] -->|PR| MAIN["main (protégée)"]
+  CI["CI: lint/scan/policy/sbom"] -. bloque .-> MAIN
+  MAIN -->|Flux reconcile| CLUSTER["Cluster K8s"]
+  REN["Renovate"] -.->|PR deps| MAIN
+  IMG["Flux Image Automation"] -.->|PR image signée| MAIN
+  CLUSTER -.->|drift| ALERT["Notification"]
