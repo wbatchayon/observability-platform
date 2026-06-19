@@ -1,0 +1,26 @@
+---
+# Fournisseur de notification (drift / échecs de réconciliation).
+apiVersion: notification.toolkit.fluxcd.io/v1beta3
+kind: Provider
+metadata:
+  name: alerting
+  namespace: flux-system
+spec:
+  type: generic
+  address: http://oneuptime.incident.svc.cluster.local/api/flux-webhook
+---
+# Alerte sur les événements de réconciliation des Kustomizations et HelmReleases.
+apiVersion: notification.toolkit.fluxcd.io/v1beta3
+kind: Alert
+metadata:
+  name: drift-and-failures
+  namespace: flux-system
+spec:
+  providerRef:
+    name: alerting
+  eventSeverity: info
+  eventSources:
+    - kind: Kustomization
+      name: "*"
+    - kind: HelmRelease
+      name: "*"

@@ -1,0 +1,51 @@
+---
+# Surveille le dépôt interne pour de nouvelles images signées.
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImageRepository
+metadata:
+  name: otel-collector
+  namespace: flux-system
+spec:
+  image: harbor.observability.internal/otel-packages/opentelemetry-collector-contrib
+  interval: 10m
+  secretRef:
+    name: harbor-pull
+---
+# Politique de sélection de version (semver stable).
+apiVersion: image.toolkit.fluxcd.io/v1beta2
+kind: ImagePolicy
+metadata:
+  name: otel-collector
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: otel-collector
+  policy:
+    semver:
+      range: ">=0.148.0"
+---
+# Ouvre une PR (et non un push direct) lorsqu'une nouvelle image signée est disponible.
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImageUpdateAutomation
+metadata:
+  name: observability-images
+  namespace: flux-system
+spec:
+  interval: 30m
+  sourceRef:
+    kind: GitRepository
+    name: observability-platform
+  git:
+    checkout:
+      ref:
+        branch: main
+    commit:
+      author:
+        name: fluxcdbot
+        email: fluxcdbot@users.noreply.github.com
+      messageTemplate: "chore: mise à jour image {{range .Updated.Images}}{{println .}}{{end}}"
+    push:
+      branch: flux-image-updates
+  update:
+    path: ./platform
+    strategy: Setters
