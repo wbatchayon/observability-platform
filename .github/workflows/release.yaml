@@ -53,24 +53,27 @@ jobs:
           output-file: observability-platform.sbom.spdx.json
       - name: Cosign
         uses: sigstore/cosign-installer@v4.1.2
-      - name: Signature des artefacts (keyless OIDC)
+      - name: Signature des artefacts (keyless OIDC, best-effort)
         env:
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
+          set +e
           cosign sign-blob --yes "observability-platform-${TAG}.tar.gz" \
             --output-signature "observability-platform-${TAG}.tar.gz.sig" \
             --output-certificate "observability-platform-${TAG}.tar.gz.pem"
           cosign sign-blob --yes observability-platform.sbom.spdx.json \
             --output-signature observability-platform.sbom.spdx.json.sig
+          exit 0
       - name: Publication des artefacts sur la GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.release-please.outputs.tag_name }}
         run: |
-          gh release upload "${TAG}" \
-            "observability-platform-${TAG}.tar.gz" \
-            "observability-platform-${TAG}.tar.gz.sig" \
-            "observability-platform-${TAG}.tar.gz.pem" \
-            observability-platform.sbom.spdx.json \
-            observability-platform.sbom.spdx.json.sig \
-            --clobber
+          # Publie le bundle + SBOM ; ajoute les signatures seulement si elles ont été produites.
+          files=( "observability-platform-${TAG}.tar.gz" "observability-platform.sbom.spdx.json" )
+          for f in "observability-platform-${TAG}.tar.gz.sig" \
+                   "observability-platform-${TAG}.tar.gz.pem" \
+                   "observability-platform.sbom.spdx.json.sig"; do
+            [ -f "$f" ] && files+=( "$f" )
+          done
+          gh release upload "${TAG}" "${files[@]}" --clobber
