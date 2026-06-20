@@ -41,7 +41,19 @@ npm run build           # vérifie le build (standalone)
 docker build -t harbor.observability.internal/library/observability-gui:0.1.0 .
 ```
 
-## Déploiement
+## Déploiement Vercel (dev)
+
+```bash
+cd gui
+vercel deploy --yes \
+  -e SESSION_SECRET="$(openssl rand -hex 24)" \
+  -e GITHUB_REPOSITORY="wbatchayon/observability-platform"
+```
+
+`output: standalone` est désactivé automatiquement sur Vercel (variable `VERCEL`) — Vercel utilise
+son adaptateur natif ; le mode standalone reste actif pour l'image Docker/air-gap.
+
+## Déploiement Kubernetes (prod / air-gap)
 
 Manifestes K8s dans [`deploy/`](deploy/) (Deployment non-root, Service, Certificate `vault-issuer`,
 NetworkPolicies, Ingress). Image tirée depuis Harbor (air-gap). Voir

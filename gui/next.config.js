@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
+  // standalone pour l'image Docker/air-gap ; sur Vercel, on laisse l'adaptateur natif.
+  output: process.env.VERCEL ? undefined : "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
   experimental: {
