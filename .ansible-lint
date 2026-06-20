@@ -1,5 +1,9 @@
 ---
 profile: production
+# yamllint est exécuté comme étape CI dédiée (.yamllint.yaml) ; on évite le doublon interne
+# d'ansible-lint et son avertissement "incompatible yamllint configuration".
+skip_list:
+  - yaml
 # Modules Windows simulés pour le lint : la collection ansible.windows/community.windows
 # n'a pas besoin d'être installée dans l'environnement de lint (elle l'est sur le contrôleur
 # réel — cf. ansible/requirements.yml). Évite les faux échecs syntax-check.

@@ -26,12 +26,22 @@ spec:
       labels:
         app: glpi-mariadb
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: mariadb
           image: ${HARBOR_REGISTRY}/library/mariadb:11.4
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
           env:
             - name: MARIADB_DATABASE
               value: glpi
@@ -49,6 +59,16 @@ spec:
                   key: mysql-root-password
           ports:
             - containerPort: 3306
+          livenessProbe:
+            tcpSocket:
+              port: 3306
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "mariadb-admin ping -h 127.0.0.1 -p$MARIADB_ROOT_PASSWORD"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
           resources:
             requests:
               memory: 512Mi
@@ -58,6 +78,15 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql
+            - name: tmp
+              mountPath: /tmp
+            - name: run
+              mountPath: /run/mysqld
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -82,17 +111,38 @@ spec:
       labels:
         app: glpi
     spec:
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: glpi
           image: ${HARBOR_REGISTRY}/library/diouxx/glpi:10.0.15
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           env:
             - name: TIMEZONE
               value: Europe/Paris
           ports:
             - containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
           resources:
             requests:
               memory: 256Mi

@@ -14,6 +14,7 @@ permissions:
   id-token: write
 
 jobs:
+  # ── Étage 1 : vérifications rapides ─────────────────────────────
   lint:
     name: Lint (yaml / terraform / ansible / helm)
     runs-on: ubuntu-latest
@@ -29,7 +30,6 @@ jobs:
       - name: tflint
         uses: terraform-linters/setup-tflint@v4
       - name: run tflint
-        # tflint --init nécessite un token pour éviter le rate-limit GitHub.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -49,52 +49,62 @@ jobs:
       - name: kubeconform
         run: |
           curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
-            | tar xz -C /usr/local/bin kubeconform
+            | sudo tar xz -C /usr/local/bin kubeconform
           find platform ingress -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 \
             | xargs -0 kubeconform -strict -ignore-missing-schemas \
                 -schema-location default \
                 -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 
+  # ── Étage 2 : analyses approfondies (après l'étage 1) ───────────
   security:
     name: Sécurité (trivy / checkov / tfsec / gitleaks / kubescape)
     runs-on: ubuntu-latest
-    # Palier d'adoption : les scanners profonds tournent et reportent dès le 1er import
-    # (visibles dans la PR) mais sont ADVISORY tant que la baseline n'est pas triée
-    # (continue-on-error). À durcir en bloquant après triage — cf. docs/governance.
+    needs: [lint, validate]
+    # Scanners en mode RAPPORT (advisory) : résultats dans le log du job, sans annotations
+    # bloquantes. À durcir en bloquant après triage de la baseline — cf. docs/governance.
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: gitleaks
-        continue-on-error: true
-        uses: gitleaks/gitleaks-action@v2
-      - name: Trivy config (IaC)
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: config
-          severity: HIGH,CRITICAL
-          exit-code: "1"
-      - name: Checkov
-        continue-on-error: true
-        uses: bridgecrewio/checkov-action@master
-        with:
-          quiet: true
-      - name: tfsec
-        continue-on-error: true
-        uses: aquasecurity/tfsec-action@v1.0.0
-        with:
-          working_directory: bootstrap/
-      - name: kubescape
-        continue-on-error: true
-        uses: kubescape/github-action@main
-        with:
-          files: "platform/ ingress/"
-          frameworks: nsa
+      - name: gitleaks (secrets)
+        run: |
+          set +e
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | sudo tar xz -C /usr/local/bin gitleaks
+          gitleaks detect --no-banner --redact
+          exit 0
+      - name: trivy config (IaC)
+        run: |
+          set +e
+          curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sudo sh -s -- -b /usr/local/bin
+          trivy config --severity HIGH,CRITICAL .
+          exit 0
+      - name: checkov (IaC)
+        run: |
+          set +e
+          pipx install checkov
+          checkov -d . --compact --quiet --soft-fail
+          exit 0
+      - name: tfsec (Terraform)
+        run: |
+          set +e
+          curl -sSL https://github.com/aquasecurity/tfsec/releases/latest/download/tfsec-linux-amd64 \
+            -o /tmp/tfsec && chmod +x /tmp/tfsec && sudo mv /tmp/tfsec /usr/local/bin/tfsec
+          tfsec bootstrap/ --soft-fail
+          exit 0
+      - name: kubescape (manifests)
+        run: |
+          set +e
+          curl -sSL https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | bash
+          export PATH="$PATH:$HOME/.kubescape/bin:$HOME/.local/bin"
+          kubescape scan framework nsa platform/ ingress/ --keep-going
+          exit 0
 
   policy:
     name: Policy as code (conftest / OPA)
     runs-on: ubuntu-latest
+    needs: [validate]
     steps:
       - uses: actions/checkout@v4
       - name: conftest
@@ -109,32 +119,10 @@ jobs:
             | sudo tar xz -C /usr/local/bin conftest
           conftest test platform/ --policy ci/policy
 
-  supply-chain:
-    name: SBOM + signature (syft / cosign)
-    runs-on: ubuntu-latest
-    needs: [lint, validate, security]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Génération SBOM (syft)
-        uses: anchore/sbom-action@v0
-        with:
-          path: .
-          format: spdx-json
-          output-file: observability-platform.sbom.json
-      - name: Cosign
-        uses: sigstore/cosign-installer@v3
-      - name: Sign SBOM (keyless OIDC)
-        if: github.event_name == 'push'
-        run: cosign sign-blob --yes observability-platform.sbom.json \
-          --output-signature observability-platform.sbom.sig
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: observability-platform.sbom.*
-
   iac-plan:
     name: Terraform plan + Flux diff (commentaire PR)
     runs-on: ubuntu-latest
+    needs: [validate]
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -154,3 +142,27 @@ jobs:
               repo: context.repo.repo,
               body: '✅ Terraform validate OK. Le `terraform plan` détaillé et le `flux diff` sont produits par le runner GitOps de l\'environnement cible.'
             })
+
+  # ── Étage 3 : supply chain (après les analyses) ─────────────────
+  supply-chain:
+    name: SBOM + signature (syft / cosign)
+    runs-on: ubuntu-latest
+    needs: [security, policy]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Génération SBOM (syft)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: observability-platform.sbom.json
+      - name: Cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign SBOM (keyless OIDC)
+        if: github.event_name == 'push'
+        run: cosign sign-blob --yes observability-platform.sbom.json \
+          --output-signature observability-platform.sbom.sig
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: observability-platform.sbom.*
