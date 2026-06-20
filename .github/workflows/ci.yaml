@@ -28,7 +28,7 @@ jobs:
       - name: terraform fmt
         run: terraform fmt -recursive -check
       - name: tflint
-        uses: terraform-linters/setup-tflint@v5
+        uses: terraform-linters/setup-tflint@v6.2.2
       - name: run tflint
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -162,7 +162,7 @@ jobs:
         if: github.event_name == 'push'
         run: cosign sign-blob --yes observability-platform.sbom.json \
           --output-signature observability-platform.sbom.sig
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: sbom
           path: observability-platform.sbom.*
