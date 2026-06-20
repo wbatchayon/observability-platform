@@ -10,6 +10,7 @@
   "schedule": ["before 6am on monday"],
   "labels": ["dependencies"],
   "prConcurrentLimit": 5,
+  "platformAutomerge": true,
   "terraform": {
     "enabled": true
   },
@@ -17,6 +18,9 @@
     "enabled": true
   },
   "flux": {
+    "enabled": true
+  },
+  "ansible-galaxy": {
     "enabled": true
   },
   "packageRules": [
