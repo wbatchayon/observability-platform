@@ -26,7 +26,8 @@ deploy.yaml ─ validate (runner hébergé) | bootstrap/deploy (runner self-host
 4. **Pipelines** : bouton `validate` / `bootstrap` / `deploy` → déclenche `deploy.yaml`.
 5. **Suivi** : tableau des exécutions (statut, conclusion, lien logs), rafraîchissement auto.
 6. **Outils** : après déploiement, accès direct aux interfaces des composants (Grafana,
-   Prometheus, Alertmanager, OneUptime, GLPI, Harbor, Vault, MinIO) via les variables `TOOL_*`.
+   Prometheus, Alertmanager, OneUptime, GLPI, **Slack** — notifications via OneUptime —, Harbor,
+   Vault, MinIO, **Renovate** — patch management) via les variables `TOOL_*`.
 
 ## Sécurité
 

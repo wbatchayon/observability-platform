@@ -57,6 +57,20 @@ export async function GET() {
       url: url("TOOL_GLPI_URL"),
     },
     {
+      key: "slack",
+      name: "Slack",
+      category: "Notifications",
+      description: "Notifications d'astreinte (problèmes majeurs) émises par OneUptime.",
+      url: url("TOOL_SLACK_URL"),
+    },
+    {
+      key: "renovate",
+      name: "Renovate",
+      category: "Patch management",
+      description: "Mises à jour automatiques des outils (charts, images, deps) par PR.",
+      url: url("TOOL_RENOVATE_URL"),
+    },
+    {
       key: "harbor",
       name: "Harbor",
       category: "Supply chain",

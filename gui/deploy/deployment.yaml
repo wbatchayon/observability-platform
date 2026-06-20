@@ -31,8 +31,11 @@ data:
   TOOL_ONEUPTIME_URL: "${TOOL_ONEUPTIME_URL}"
   TOOL_GLPI_URL: "${TOOL_GLPI_URL}"
   TOOL_HARBOR_URL: "https://${HARBOR_REGISTRY}"
-  TOOL_VAULT_URL: "${TOOL_VAULT_URL}"
+  TOOL_VAULT_URL: "${VAULT_ADDR}"
   TOOL_MINIO_URL: "${TOOL_MINIO_URL}"
+  TOOL_SLACK_URL: "${TOOL_SLACK_URL}"
+  # Patch management : tableau de bord Renovate (dependency dashboard du dépôt).
+  TOOL_RENOVATE_URL: "https://github.com/${GUI_GITHUB_REPOSITORY}/issues?q=is%3Aissue+Dependency+Dashboard"
 ---
 apiVersion: apps/v1
 kind: Deployment

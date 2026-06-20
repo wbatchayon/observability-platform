@@ -10,6 +10,8 @@ import {
   Boxes,
   KeyRound,
   Database,
+  MessageSquare,
+  RefreshCw,
   ExternalLink,
   type LucideIcon,
 } from "lucide-react";
@@ -31,6 +33,8 @@ const icons: Record<string, LucideIcon> = {
   harbor: Boxes,
   vault: KeyRound,
   minio: Database,
+  slack: MessageSquare,
+  renovate: RefreshCw,
 };
 
 export default function ToolsPage() {

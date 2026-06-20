@@ -17,9 +17,17 @@
 
 ## Alerting / incident
 
+**Alertmanager est le point central**, il remonte vers **OneUptime** qui crée les tickets **GLPI**
+et **notifie Slack** pour les problèmes majeurs (astreinte).
+
 ```
-Prometheus → Alertmanager → OneUptime → GLPI (ticket) + notifications (Slack/Teams/Email/SMS)
+Prometheus → Alertmanager (central) → OneUptime → GLPI (ticket)
+                                              └──→ Slack (astreinte, si majeur)
 ```
+
+**Failover** : OneUptime surveille Alertmanager ; s'il est indisponible (panne/maintenance),
+OneUptime **prend le relais** (alerting de secours via ses propres sondes) puis repasse en relais
+au rétablissement. Voir `platform/incident/integration.md`.
 
 ## Sécurité du flux
 

@@ -5,3 +5,4 @@ resources:
   - oneuptime.yaml
   - glpi.yaml
   - notifications.yaml
+  - failover.yaml

@@ -1,0 +1,52 @@
+---
+# Rôle de secours d'OneUptime : prend le relais d'Alertmanager si celui-ci est indisponible
+# (panne ou maintenance planifiée), le temps de sa remise en service.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oneuptime-failover
+  namespace: incident
+data:
+  failover.yaml: |
+    # En fonctionnement nominal :
+    #   Alertmanager (central) -> OneUptime -> GLPI (ticket) + Slack (astreinte, si majeur)
+    #
+    # OneUptime surveille en continu (sondes indépendantes) les composants clés, dont
+    # Alertmanager lui-même. Si Alertmanager est DOWN :
+    #   1. OneUptime bascule en mode "alerting de secours" (ses propres sondes deviennent
+    #      la source d'alerte) ;
+    #   2. il continue de créer les tickets GLPI et de notifier l'astreinte via Slack ;
+    #   3. au rétablissement d'Alertmanager, OneUptime repasse en mode relais et cesse
+    #      l'alerting direct (évite les doublons).
+    monitors:
+      - name: alertmanager-health
+        type: http
+        target: http://alertmanager-operated.monitoring.svc.cluster.local:9093/-/healthy
+        interval: 30s
+        on_down:
+          activate: backup-alerting     # OneUptime devient source d'alerte
+          notify: [slack-astreinte, glpi]
+      # Sondes de secours (actives uniquement quand Alertmanager est DOWN)
+      - name: otel-gateway
+        type: http
+        target: http://otel-gateway.ingestion.svc.cluster.local:13133
+        backup_only: true
+      - name: loki
+        type: http
+        target: http://loki-gateway.backends.svc.cluster.local/ready
+        backup_only: true
+      - name: mimir
+        type: http
+        target: http://mimir-distributor.backends.svc.cluster.local/ready
+        backup_only: true
+      - name: tempo
+        type: http
+        target: http://tempo-query-frontend.backends.svc.cluster.local:3100/ready
+        backup_only: true
+      - name: grafana
+        type: http
+        target: http://grafana.visualization.svc.cluster.local/api/health
+        backup_only: true
+    restore:
+      when: alertmanager-health == up
+      action: resume-relay              # repasse en relais, stoppe l'alerting direct
