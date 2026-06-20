@@ -1,4 +1,4 @@
-# environments/_template — modèle d'environnement
+# environments/_template - modèle d'environnement
 
 **La seule surface de configuration de la plateforme.** Pour créer un environnement :
 

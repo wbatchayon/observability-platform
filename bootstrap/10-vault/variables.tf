@@ -21,7 +21,7 @@ variable "vault_replicas" {
 }
 
 variable "harbor_registry" {
-  description = "Registre interne Harbor (host) servant images et charts OCI — aucun accès Internet."
+  description = "Registre interne Harbor (host) servant images et charts OCI - aucun accès Internet."
   type        = string
   default     = "harbor.observability.internal"
 }

@@ -1,4 +1,4 @@
-# bootstrap/10-vault — Vault + PKI mTLS + auth
+# bootstrap/10-vault - Vault + PKI mTLS + auth
 
 Déploie HashiCorp Vault (HA Raft), configure la **PKI** (CA racine + intermédiaire) pour le
 **mTLS de bout en bout**, et les méthodes d'authentification (Kubernetes pour les pods, LDAP/AD
@@ -7,7 +7,7 @@ pour les humains).
 ## Prérequis
 
 - Cluster provisionné (`bootstrap/00-cluster`) → `kubeconfig`.
-- Chart et images Vault servis depuis **Harbor** (OCI) — aucun accès Internet.
+- Chart et images Vault servis depuis **Harbor** (OCI) - aucun accès Internet.
 - **Auto-unseal Transit** activé par défaut : un Vault de bootstrap (interne, air-gap) expose un
   moteur `transit/` avec une clé d'unseal. Vault se descelle automatiquement au démarrage.
 
@@ -54,7 +54,7 @@ terraform apply -var-file=../../environments/dev/10-vault.tfvars
 | Output | Usage |
 |---|---|
 | `vault_address` | endpoint pour cert-manager |
-| `vault_pki_sign_path` | `pki_int/sign/observability` — cert-manager signe les CSR |
+| `vault_pki_sign_path` | `pki_int/sign/observability` - cert-manager signe les CSR |
 | `vault_pki_issuer_path` | `pki_int/issue/observability` |
 | `vault_pki_role` | `observability` |
 | `vault_k8s_auth_path` | auth Kubernetes pour cert-manager |

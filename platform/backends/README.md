@@ -1,4 +1,4 @@
-# platform/backends — Backends de télémétrie (Loki / Mimir / Tempo)
+# platform/backends - Backends de télémétrie (Loki / Mimir / Tempo)
 
 **Brique de référence** (structure et conventions suivies par les autres briques `platform/`).
 Stocke logs, métriques et traces dans MinIO et expose les endpoints d'écriture et de lecture.
@@ -18,7 +18,7 @@ Stocke logs, métriques et traces dans MinIO et expose les endpoints d'écriture
 - Mimir push : `http://mimir-distributor.backends.svc.cluster.local/api/v1/push`
 - Tempo OTLP gRPC : `tempo-distributor.backends.svc.cluster.local:4317`
 
-**Lecture (consommés par platform/visualization — datasources Grafana)** :
+**Lecture (consommés par platform/visualization - datasources Grafana)** :
 - Loki : `http://loki-gateway.backends.svc.cluster.local`
 - Mimir : `http://mimir-query-frontend.backends.svc.cluster.local/prometheus`
 - Tempo : `http://tempo-query-frontend.backends.svc.cluster.local:3100`

@@ -1,4 +1,4 @@
-# platform/monitoring — Prometheus, Alertmanager, Auto-healing
+# platform/monitoring - Prometheus, Alertmanager, Auto-healing
 
 Surveille les composants de la plateforme et route les alertes vers la gestion d'incidents.
 

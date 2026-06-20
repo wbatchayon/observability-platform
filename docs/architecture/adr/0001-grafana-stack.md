@@ -1,4 +1,4 @@
-# ADR 0001 — Backend = stack Grafana (Loki/Mimir/Tempo)
+# ADR 0001 - Backend = stack Grafana (Loki/Mimir/Tempo)
 
 **Statut** : Accepté · **Date** : 2026-06-19
 

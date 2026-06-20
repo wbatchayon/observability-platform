@@ -1,4 +1,4 @@
-# platform/storage — Stockage objet MinIO (S3)
+# platform/storage - Stockage objet MinIO (S3)
 
 Fournit le stockage objet compatible S3 pour le **stockage long terme** des logs, métriques et
 traces (Loki/Mimir/Tempo y déposent leurs blocks).

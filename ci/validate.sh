@@ -5,12 +5,12 @@ cd "$(dirname "$0")/.."
 
 rc=0
 have() { command -v "$1" >/dev/null 2>&1; }
-warn() { echo "⚠️  $1 absent — étape ignorée."; }
+warn() { echo "⚠️  $1 absent - étape ignorée."; }
 
-echo "### 1/3 — Lint"
+echo "### 1/3 - Lint"
 bash ci/lint.sh || rc=1
 
-echo "### 2/3 — terraform validate"
+echo "### 2/3 - terraform validate"
 if have terraform; then
   while IFS= read -r d; do
     echo "==> terraform validate $d"
@@ -18,7 +18,7 @@ if have terraform; then
   done < <(find bootstrap -type f -name '*.tf' -exec dirname {} \; | sort -u)
 else warn terraform; fi
 
-echo "### 3/3 — kubeconform (manifests Kubernetes/Flux)"
+echo "### 3/3 - kubeconform (manifests Kubernetes/Flux)"
 if have kubeconform; then
   # Schémas CRD (Flux, cert-manager, Kyverno, Prometheus-operator) via dépôt de schémas.
   find platform ingress -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 \

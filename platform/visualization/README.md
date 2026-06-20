@@ -1,4 +1,4 @@
-# platform/visualization — Grafana
+# platform/visualization - Grafana
 
 Tableau de bord unifié (logs + métriques + traces) avec corrélation croisée.
 

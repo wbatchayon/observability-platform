@@ -1,4 +1,4 @@
-# Runbook — Incident
+# Runbook - Incident
 
 ## Réception
 Alertmanager → OneUptime crée un ticket GLPI et notifie (Slack/Teams/Email/SMS) selon la sévérité.

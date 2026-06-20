@@ -1,5 +1,5 @@
 ---
-# Variables communes — surface de configuration des agents (par environnement).
+# Variables communes - surface de configuration des agents (par environnement).
 environment_name: _template
 
 # Dépôt interne (output de bootstrap/30-package-repo). Les VMs sont air-gap.

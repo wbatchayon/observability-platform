@@ -1,4 +1,4 @@
-# Runbook — Scaling
+# Runbook - Scaling
 
 Toute mise à l'échelle se fait **par PR** sur `environments/<env>/env-values.yaml`.
 

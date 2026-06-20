@@ -1,4 +1,6 @@
-# 📊 Plateforme d'Observabilité — Reproductible, Sécurisée, GitOps
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
+# Plateforme d'Observabilité — Reproductible, Sécurisée, GitOps
 
 > 100% open source · stack Grafana (Loki / Mimir / Tempo / Grafana) · OpenTelemetry · FluxCD · DevSecOps
 
@@ -7,7 +9,7 @@ Le principe : **vous changez uniquement les valeurs/credentials d'un environneme
 
 ---
 
-## 🎯 Principe « change credentials & launch »
+## Principe « change credentials & launch »
 
 Toute la variabilité (credentials, domaines, sizing, endpoints) vit dans `environments/<env>/`.
 Le reste du code est strictement identique d'un environnement à l'autre.
@@ -30,7 +32,7 @@ ansible-playbook -i ansible/inventories/prod ansible/playbooks/install-agent.yam
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 VMs (agent OTel, air-gap) ──OTLP/mTLS──▶ Edge Collector (par DC)
@@ -38,7 +40,7 @@ VMs (agent OTel, air-gap) ──OTLP/mTLS──▶ Edge Collector (par DC)
         ├─ logs    ─▶ Loki  ─┐
         ├─ metrics ─▶ Mimir ─┼─▶ MinIO (S3 long terme)
         └─ traces  ─▶ Tempo ─┘
-                         └─▶ Grafana (visualisation unifiée)
+                         └─▶ Grafana (visualisation unifiée) ─▶ OneUptime ─▶ GLPI + notifications
 Prometheus ─▶ Alertmanager ─▶ OneUptime ─▶ GLPI + notifications
 ```
 
@@ -46,21 +48,7 @@ Détails : [`docs/architecture/`](docs/architecture/) · fonctionnement : [`docs
 
 ---
 
-## 📁 Structure du dépôt
-
-| Dossier | Rôle |
-|---|---|
-| `environments/` | **Seule surface de configuration** — `_template` + `dev`/`staging`/`prod` |
-| `bootstrap/` | Terraform : `00-cluster`, `10-vault`, `20-flux`, `30-package-repo` |
-| `platform/` | HelmReleases FluxCD : `security`, `storage`, `backends`, `ingestion`, `monitoring`, `visualization`, `incident` |
-| `ingress/` | HAProxy/LB + terminaison TLS |
-| `ansible/` | Gestion des agents OTel sur VMs air-gap |
-| `ci/` | Scripts de validation/scan réutilisés par le `Makefile` et la CI |
-| `docs/` | Architecture, runbooks, how-it-works, schémas (`docs/imgs/`) |
-
----
-
-## ✅ Prérequis
+## Prérequis
 
 - **Kubernetes** 1.25+ (provisionné par `bootstrap/00-cluster`, défaut kubeadm on-prem)
 - Outils CLI : `terraform` ≥ 1.6, `flux`, `helm`, `kubectl`, `ansible`, `sops` + `age`
@@ -91,4 +79,4 @@ make deploy ENV=dev      # réconcilie la plateforme via Flux
 
 ---
 
-*Auteur : William BATCHAYON*
+*Auteur : William BATCHAYON - Architecte Technique*

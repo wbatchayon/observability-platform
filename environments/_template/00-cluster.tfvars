@@ -1,4 +1,4 @@
-# Provisioning du cluster — bootstrap/00-cluster
+# Provisioning du cluster - bootstrap/00-cluster
 cluster_name       = "observability-REMPLACEZ"
 kubernetes_version = "1.29.4"
 

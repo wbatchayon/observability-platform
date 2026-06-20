@@ -1,11 +1,11 @@
-# platform/security — Sécurité de la plateforme
+# platform/security - Sécurité de la plateforme
 
 Fondation DevSecOps appliquée par FluxCD : namespaces durcis, **mTLS**, **deny-by-default**,
 policy-as-code, RBAC.
 
 ## Ce que cette brique produit
 
-- **`ClusterIssuer` `vault-issuer`** — émetteur cert-manager adossé à la **PKI Vault**
+- **`ClusterIssuer` `vault-issuer`** - émetteur cert-manager adossé à la **PKI Vault**
   (`pki_int/sign/observability`), authentifié via l'auth Kubernetes (rôle `cert-manager`).
   **Toutes les autres briques** (storage, backends, ingestion, visualization, ingress) y
   réfèrent pour obtenir leurs certificats mTLS.

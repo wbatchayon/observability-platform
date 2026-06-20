@@ -1,4 +1,4 @@
-# Vault + PKI — bootstrap/10-vault
+# Vault + PKI - bootstrap/10-vault
 kubeconfig_path = "../00-cluster/modules/kubeadm/kubeconfig-observability-REMPLACEZ"
 vault_address   = "https://vault.vault.svc.cluster.local:8200"
 vault_namespace = "vault"

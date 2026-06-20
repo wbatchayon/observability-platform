@@ -1,4 +1,4 @@
-# ingress — HAProxy + terminaison TLS
+# ingress - HAProxy + terminaison TLS
 
 Points d'entrée de la plateforme : ingestion OTLP/gRPC (pour les edge/agents) et UI Grafana
 (HTTPS).

@@ -1,4 +1,4 @@
-# platform/ingestion — OTel Gateway + Edge Collectors
+# platform/ingestion - OTel Gateway + Edge Collectors
 
 Couche d'ingestion : reçoit la télémétrie, la traite et la route vers les backends.
 Distribution **OpenTelemetry Collector contrib v0.148.0** (tirée du dépôt interne Harbor).

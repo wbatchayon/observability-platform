@@ -4,9 +4,9 @@
 
 Tout ce qui change entre environnements vit dans `environments/<env>/` :
 
-- `*.tfvars` — paramètres du socle Terraform (cluster, Vault, Flux, Harbor).
-- `env-values.yaml` — variables non sensibles (ConfigMap `env-values`).
-- `secrets.sops.yaml` — secrets chiffrés SOPS (Secret `env-secrets`).
+- `*.tfvars` - paramètres du socle Terraform (cluster, Vault, Flux, Harbor).
+- `env-values.yaml` - variables non sensibles (ConfigMap `env-values`).
+- `secrets.sops.yaml` - secrets chiffrés SOPS (Secret `env-secrets`).
 
 ```bash
 cp -r environments/_template environments/prod
@@ -47,9 +47,9 @@ Les agents (air-gap) tirent le package OTel depuis Harbor et exportent en OTLP/m
 
 - **Grafana** : dashboards + corrélation logs/traces/métriques.
 - **Alertes** : Prometheus → Alertmanager → OneUptime → GLPI + notifications.
-- **Évolutions** : par **Pull Request** (CI bloquante) — voir [git-workflow](git-workflow.md).
+- **Évolutions** : par **Pull Request** (CI bloquante) - voir [git-workflow](git-workflow.md).
 
 ## Reproductibilité
 
 Le même code produit n'importe quel environnement. Pour un nouvel environnement, on **copie
-`_template`, on remplit les credentials, et on lance** — rien d'autre à modifier.
+`_template`, on remplit les credentials, et on lance** - rien d'autre à modifier.

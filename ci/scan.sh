@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 rc=0
 have() { command -v "$1" >/dev/null 2>&1; }
-warn() { echo "⚠️  $1 absent — étape ignorée."; }
+warn() { echo "⚠️  $1 absent - étape ignorée."; }
 
 echo "==> gitleaks (secrets)"
 if have gitleaks; then gitleaks detect --no-banner --redact || rc=1; else warn gitleaks; fi

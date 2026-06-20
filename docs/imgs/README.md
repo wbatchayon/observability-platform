@@ -1,6 +1,6 @@
-# docs/imgs — Schémas et visuels du projet
+# docs/imgs - Schémas et visuels du projet
 
-Diagrammes sources (Mermaid `.mmd`) — rendus en SVG/PNG par la CI docs ou localement :
+Diagrammes sources (Mermaid `.mmd`) - rendus en SVG/PNG par la CI docs ou localement :
 
 ```bash
 # Rendu local d'un diagramme

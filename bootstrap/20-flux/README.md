@@ -1,4 +1,4 @@
-# bootstrap/20-flux — Bootstrap FluxCD (moteur GitOps)
+# bootstrap/20-flux - Bootstrap FluxCD (moteur GitOps)
 
 Installe FluxCD et connecte le dépôt GitOps. Flux **réconcilie en continu** `platform/` en
 injectant l'overlay de l'environnement (`environments/<env>/`).
@@ -37,7 +37,7 @@ flux get kustomizations
 ## Automatisation
 
 - **image-automation.yaml** : ouvre une **PR** (`flux-image-updates`) quand une image signée plus
-  récente est publiée dans le dépôt interne — jamais de push direct sur `main`.
+  récente est publiée dans le dépôt interne - jamais de push direct sur `main`.
 - **notification.yaml** : alerte (drift, échecs de reconcile) vers OneUptime.
 
 ## Outputs

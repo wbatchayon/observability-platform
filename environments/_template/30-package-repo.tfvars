@@ -1,4 +1,4 @@
-# Dépôt de packages Harbor — bootstrap/30-package-repo
+# Dépôt de packages Harbor - bootstrap/30-package-repo
 kubeconfig_path  = "../00-cluster/modules/kubeadm/kubeconfig-observability-REMPLACEZ"
 harbor_namespace = "harbor"
 harbor_url       = "https://harbor.observability.internal"

@@ -1,8 +1,6 @@
-# Plateforme d'Observabilité — Plan d'Implémentation
+# Plateforme d'Observabilité - Plan d'Implémentation
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
-**Goal:** Construire un monorepo GitOps/DevSecOps déployant une plateforme d'observabilité (Loki/Mimir/Tempo/Grafana) reproductible — l'utilisateur change les credentials d'un environnement et lance.
+**Goal:** Construire un monorepo GitOps/DevSecOps déployant une plateforme d'observabilité (Loki/Mimir/Tempo/Grafana) reproductible - l'utilisateur change les credentials d'un environnement et lance.
 
 **Architecture:** Terraform (socle : cluster, Vault, Flux, dépôt packages) → FluxCD/Helm (plateforme K8s) → Ansible (agents OTel sur VMs air-gap). Toute la variabilité est isolée dans `environments/<env>/`. Sécurité transversale : mTLS Vault PKI, SOPS, NetworkPolicies, Kyverno, supply chain signée.
 
@@ -10,7 +8,7 @@
 
 ## Global Constraints
 
-- 100% open source — aucune dépendance propriétaire.
+- 100% open source - aucune dépendance propriétaire.
 - Backend = Loki/Mimir/Tempo/Grafana (la spec OTel Elasticsearch/Thanos est obsolète).
 - VMs air-gap : packages OTel tirés depuis Harbor/Nexus interne, gérées par Ansible uniquement.
 - mTLS de bout en bout (agent→edge→LB→gateway→backends) via Vault PKI + cert-manager.
@@ -33,7 +31,7 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 
 ---
 
-## Task B0 : Socle repo — Makefile, CI/CD, workflow PR
+## Task B0 : Socle repo - Makefile, CI/CD, workflow PR
 
 **Files:**
 - Create: `Makefile`, `README.md`
@@ -65,9 +63,9 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 
 **Interfaces:**
 - Consumes: `environments/<env>/cluster.tfvars` (noms de nœuds, IPs, CIDR pods/services, version K8s).
-- Produces: `kubeconfig` (output), endpoint API, nom du cluster — consommés par B2/B3.
+- Produces: `kubeconfig` (output), endpoint API, nom du cluster - consommés par B2/B3.
 
-**Contenu:** module `kubeadm` pluggable (défaut on-prem : init control-plane, join workers, CNI Calico, CIDR configurable). Providers pluggables documentés pour cloud. Variables sans valeur en dur — tout vient des tfvars d'env.
+**Contenu:** module `kubeadm` pluggable (défaut on-prem : init control-plane, join workers, CNI Calico, CIDR configurable). Providers pluggables documentés pour cloud. Variables sans valeur en dur - tout vient des tfvars d'env.
 
 **Validation:** `terraform init -backend=false && terraform validate && tflint`.
 
@@ -79,7 +77,7 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 
 **Interfaces:**
 - Consumes: `kubeconfig` (B1), `environments/<env>/vault.tfvars`.
-- Produces: endpoint Vault, rôle PKI (`pki_issuer_url`), montages secrets — consommés par B5 (cert-manager) et toutes les briques nécessitant des secrets.
+- Produces: endpoint Vault, rôle PKI (`pki_issuer_url`), montages secrets - consommés par B5 (cert-manager) et toutes les briques nécessitant des secrets.
 
 **Contenu:** déploiement Vault (HA Raft), activation PKI (CA racine + intermédiaire pour mTLS), policies par brique, auth Kubernetes + LDAP/AD. Rotation de certs configurée.
 
@@ -107,7 +105,7 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 
 **Interfaces:**
 - Consumes: `kubeconfig`/infra (B1), `environments/<env>/registry.tfvars`.
-- Produces: URL du dépôt interne + chemins des packages OTel (`.deb/.rpm/.tar.gz` v0.148.0) — consommés par B13 (Ansible).
+- Produces: URL du dépôt interne + chemins des packages OTel (`.deb/.rpm/.tar.gz` v0.148.0) - consommés par B13 (Ansible).
 
 **Contenu:** déploiement Harbor (registre OCI + dépôt de packages génériques) ou Nexus, repositories pour packages OTel, comptes robot read-only pour les VMs, rétention. Alignement sur `VM_Configuration/Docs/Markdown/specification_packages_otel.md` (liste des packages).
 
@@ -135,7 +133,7 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 
 **Interfaces:**
 - Consumes: `ClusterIssuer` (B5), `environments/<env>/storage.values.yaml` (sizing, credentials via SOPS).
-- Produces: endpoint S3 + buckets (`loki`, `mimir`, `tempo`) + secret d'accès — consommés par B7.
+- Produces: endpoint S3 + buckets (`loki`, `mimir`, `tempo`) + secret d'accès - consommés par B7.
 
 **Contenu:** MinIO distribué (≥4 nœuds), TLS via cert-manager, versioning + chiffrement au repos, buckets pré-créés, politique de rétention.
 
@@ -143,13 +141,13 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 
 ---
 
-## Task B7 : Backends télémétrie (`platform/backends`) — BRIQUE DE RÉFÉRENCE
+## Task B7 : Backends télémétrie (`platform/backends`) - BRIQUE DE RÉFÉRENCE
 
 **Files:** `kustomization.yaml`, `loki.yaml`, `mimir.yaml`, `tempo.yaml` (HelmReleases), `README.md`
 
 **Interfaces:**
 - Consumes: endpoint S3 + buckets (B6), `ClusterIssuer` (B5), `environments/<env>/backends.values.yaml` (rétention, réplication, tenants).
-- Produces: endpoints OTLP/push internes (`loki-gateway`, `mimir-distributor`, `tempo-distributor`) — consommés par B8 ; datasources — consommés par B10.
+- Produces: endpoints OTLP/push internes (`loki-gateway`, `mimir-distributor`, `tempo-distributor`) - consommés par B8 ; datasources - consommés par B10.
 
 **Contenu:** Loki (mode distribué, S3, rétention), Mimir (multi-tenant, S3, réplication), Tempo (distribué, S3, OTLP receiver). mTLS interne, multi-tenancy. **Brique modèle** : doc et structure exemplaires que les autres suivent.
 
@@ -157,7 +155,7 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 
 ---
 
-## Task B8 : Ingestion — OTel Gateway + Edge (`platform/ingestion`)
+## Task B8 : Ingestion - OTel Gateway + Edge (`platform/ingestion`)
 
 **Files:** `kustomization.yaml`, `otel-gateway.yaml` (HelmRelease, 3 replicas), `edge-collector.yaml`, `gateway-config.yaml`, `README.md`
 
@@ -165,7 +163,7 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 - Consumes: endpoints backends (B7), `ClusterIssuer` (B5), `environments/<env>/ingestion.values.yaml`.
 - Produces: endpoint d'ingestion OTLP (service exposé via B12) consommé par les agents VMs (B13).
 
-**Contenu:** OTel Gateway (3 replicas) — pipeline : receivers OTLP mTLS → processors (memory_limiter, filter, batch, resource/attributes enrichment, tail sampling) → queues (memory + persistent + retry) → exporters Loki/Mimir/Tempo. Edge Collector (DaemonSet/Deployment par DC) : buffer, filtre, compression. Aligné OTel v0.148.0.
+**Contenu:** OTel Gateway (3 replicas) - pipeline : receivers OTLP mTLS → processors (memory_limiter, filter, batch, resource/attributes enrichment, tail sampling) → queues (memory + persistent + retry) → exporters Loki/Mimir/Tempo. Edge Collector (DaemonSet/Deployment par DC) : buffer, filtre, compression. Aligné OTel v0.148.0.
 
 **Validation:** `helm lint`, `kubeconform`, validation config OTel (`otelcol validate`), `trivy config`.
 
@@ -227,7 +225,7 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 
 ---
 
-## Task B13 : Fleet VMs — Ansible (`ansible`)
+## Task B13 : Fleet VMs - Ansible (`ansible`)
 
 **Files:** `ansible.cfg`, `inventories/_template/hosts.yaml`, `inventories/dev|staging|prod/`, `roles/otel-agent/`, `roles/common/`, `playbooks/install-agent.yaml`, `playbooks/configure-agent.yaml`, `README.md`
 
@@ -260,7 +258,7 @@ L'IaC n'a pas de tests unitaires classiques. Le cycle de chaque brique est :
 **Files:** `_template/` (tous les `*.tfvars` et `*.values.yaml` + `secrets.sops.yaml` avec clés vides documentées), `dev/`, `staging/`, `prod/`
 
 **Interfaces:**
-- Produces: l'unique surface de configuration — copier `_template/`, remplir, lancer.
+- Produces: l'unique surface de configuration - copier `_template/`, remplir, lancer.
 
 **Contenu:** un fichier par brique avec toutes les variables (commentées), secrets chiffrés SOPS. `dev/staging/prod` = exemples remplis avec valeurs non sensibles.
 

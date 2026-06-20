@@ -5,8 +5,8 @@ cluster. Toute évolution passe par une **Pull Request** avec CI bloquante.
 
 ## Stratégie de branches
 
-- `main` — état déployé en **production**, branche **protégée** (jamais de push direct).
-- Branches de feature (`feat/...`, `fix/...`) — courtes, mergées par PR.
+- `main` - état déployé en **production**, branche **protégée** (jamais de push direct).
+- Branches de feature (`feat/...`, `fix/...`) - courtes, mergées par PR.
 - Promotion entre environnements **par PR** : `dev` → `staging` → `prod` (le diff Flux et le
   plan Terraform sont visibles dans la PR avant merge).
 
@@ -48,12 +48,12 @@ Un échec **bloque le merge**.
 
 ## Automatisation par PR
 
-- **Renovate** — PRs de mise à jour des dépendances (Terraform, charts Helm, images, GitHub
+- **Renovate** - PRs de mise à jour des dépendances (Terraform, charts Helm, images, GitHub
   Actions). Minor/patch sûrs en auto-merge, majeures en revue humaine. Responsabilités et cadence
   d'approbation : voir le [RACI des montées de version](../governance/raci-version-upgrades.md).
-- **Flux Image Automation** — ouvre une PR quand une nouvelle image **signée** est disponible
+- **Flux Image Automation** - ouvre une PR quand une nouvelle image **signée** est disponible
   dans le dépôt interne.
-- **Drift detection** — Flux alerte si l'état du cluster diverge de Git.
+- **Drift detection** - Flux alerte si l'état du cluster diverge de Git.
 
 ## Cycle type
 

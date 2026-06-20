@@ -14,7 +14,7 @@ output "robot_account_name" {
 }
 
 output "robot_account_secret" {
-  description = "Token du compte robot (régénéré à chaque rotation) — à injecter dans le vault Ansible/SOPS."
+  description = "Token du compte robot (régénéré à chaque rotation) à injecter dans le vault Ansible/SOPS."
   value       = harbor_robot_account.vm_pull.secret
   sensitive   = true
 }

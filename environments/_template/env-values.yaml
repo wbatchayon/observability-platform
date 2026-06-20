@@ -1,5 +1,5 @@
 ---
-# ConfigMap `env-values` — toutes les variables NON sensibles injectées par Flux (postBuild
+# ConfigMap `env-values` - toutes les variables NON sensibles injectées par Flux (postBuild
 # substituteFrom) dans les manifests platform/. C'est ici qu'on adapte un environnement.
 apiVersion: v1
 kind: ConfigMap

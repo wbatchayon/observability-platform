@@ -1,4 +1,4 @@
-# Plateforme d'Observabilité — orchestration locale
+# Plateforme d'Observabilité - orchestration locale
 # Principe : on change les valeurs/credentials de environments/$(ENV)/ puis on lance.
 #
 # Usage : make <cible> ENV=dev|staging|prod   (ENV par défaut : dev)

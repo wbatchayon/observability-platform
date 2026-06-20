@@ -1,4 +1,4 @@
-# platform/incident — Gestion d'incidents (OneUptime + GLPI + notifications)
+# platform/incident - Gestion d'incidents (OneUptime + GLPI + notifications)
 
 ## Produit
 
@@ -14,4 +14,4 @@
 ## Consomme
 
 `environments/<env>/incident.values.yaml` : credentials GLPI/DB (`GLPI_DB_*`), webhooks
-(`SLACK_WEBHOOK_URL`, `TEAMS_WEBHOOK_URL`), SMTP — tous via SOPS.
+(`SLACK_WEBHOOK_URL`, `TEAMS_WEBHOOK_URL`), SMTP - tous via SOPS.

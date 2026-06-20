@@ -1,4 +1,4 @@
-# ADR 0002 — GitOps avec FluxCD + workflow Pull Request
+# ADR 0002 - GitOps avec FluxCD + workflow Pull Request
 
 **Statut** : Accepté · **Date** : 2026-06-19
 

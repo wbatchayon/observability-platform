@@ -1,4 +1,4 @@
-# bootstrap/00-cluster — Provisioning Kubernetes
+# bootstrap/00-cluster - Provisioning Kubernetes
 
 Provisionne le cluster Kubernetes. **Étape obligatoire** : tout le reste en dépend.
 Défaut : **kubeadm on-prem** (adapté au contexte air-gap multi-DC). Architecture **pluggable** :

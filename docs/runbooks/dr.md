@@ -1,9 +1,9 @@
-# Runbook — Reprise après sinistre (DR)
+# Runbook - Reprise après sinistre (DR)
 
 ## Sauvegardes
 - **MinIO** : versioning activé ; réplication cross-site recommandée.
 - **Vault** : snapshots Raft réguliers (`vault operator raft snapshot save`).
-- **Configuration** : intégralement dans Git (IaC) — rien à sauvegarder hors Git.
+- **Configuration** : intégralement dans Git (IaC) - rien à sauvegarder hors Git.
 - **GLPI/OneUptime** : snapshots des bases (MariaDB/PostgreSQL).
 
 ## Restauration cluster (perte totale)

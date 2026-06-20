@@ -1,4 +1,4 @@
-# bootstrap/30-package-repo — Dépôt interne de packages OTel (air-gap)
+# bootstrap/30-package-repo - Dépôt interne de packages OTel (air-gap)
 
 Déploie **Harbor** (registre OCI + dépôt d'artefacts) pour héberger les packages OpenTelemetry
 Collector contrib **v0.148.0**. Les **VMs sont air-gap** (zéro accès Internet) : elles tirent ces

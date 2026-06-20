@@ -21,7 +21,7 @@ resource "kubernetes_namespace" "vault" {
 resource "helm_release" "vault" {
   name      = "vault"
   namespace = kubernetes_namespace.vault.metadata[0].name
-  # Chart servi depuis le registre interne Harbor (OCI) — aucun accès Internet.
+  # Chart servi depuis le registre interne Harbor (OCI) - aucun accès Internet.
   repository = "oci://${var.harbor_registry}/charts"
   chart      = "vault"
   version    = "0.28.0"

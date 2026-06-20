@@ -1,4 +1,4 @@
-# Runbook — Déploiement
+# Runbook - Déploiement
 
 ## Prérequis
 - CLI : `terraform`, `flux`, `kubectl`, `helm`, `ansible`, `sops`, `age`.

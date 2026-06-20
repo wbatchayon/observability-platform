@@ -1,4 +1,4 @@
-# Air-gap — aucune communication directe avec Internet
+# Air-gap - aucune communication directe avec Internet
 
 Principe : **rien ne sort vers Internet**. Toutes les images de conteneurs et tous les charts Helm
 sont **importés dans Harbor**, et tous les composants les tirent depuis Harbor.

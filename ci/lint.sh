@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 
 rc=0
 have() { command -v "$1" >/dev/null 2>&1; }
-warn() { echo "⚠️  $1 absent — étape ignorée (installez-le pour une validation complète)."; }
+warn() { echo "⚠️  $1 absent - étape ignorée (installez-le pour une validation complète)."; }
 
 echo "==> yamllint"
 if have yamllint; then yamllint . || rc=1; else warn yamllint; fi

@@ -1,4 +1,4 @@
-# Spec de Design — Plateforme d'Observabilité Reproductible (GitOps / DevSecOps)
+# Spec de Design - Plateforme d'Observabilité Reproductible (GitOps / DevSecOps)
 
 > **Date** : 2026-06-19 · **Auteur** : William BATCHAYON · **Statut** : Validé (brainstorming)
 
@@ -8,7 +8,7 @@
 
 Construire une **plateforme d'observabilité 100% open source, reproductible dans n'importe quel
 environnement**. Le principe directeur : *l'utilisateur change uniquement les credentials/valeurs
-d'un environnement, puis lance — et obtient un déploiement identique et sécurisé.*
+d'un environnement, puis lance - et obtient un déploiement identique et sécurisé.*
 
 Source de vérité fonctionnelle : `idée.md`. Backend retenu : **stack Grafana
 (Loki / Mimir / Tempo / Grafana)**. La spec OTel antérieure (`specification_packages_otel.md`)
@@ -16,18 +16,18 @@ qui mentionnait Elasticsearch/Thanos est **obsolète** et sera réalignée sur c
 
 ## 2. Principes d'architecture
 
-1. **GitOps first** — Git est la source de vérité ; FluxCD réconcilie le cluster. Aucun
+1. **GitOps first** - Git est la source de vérité ; FluxCD réconcilie le cluster. Aucun
    `kubectl apply` manuel en exploitation.
-2. **Pull Request workflow** — `main` = état prod, protégée. Toute évolution passe par PR avec
+2. **Pull Request workflow** - `main` = état prod, protégée. Toute évolution passe par PR avec
    CI bloquante, `CODEOWNERS`, conventional commits, promotion `dev → staging → prod` par PR.
-3. **Sécurité par défaut (DevSecOps)** — mTLS partout (PKI Vault), secrets chiffrés (SOPS+age),
+3. **Sécurité par défaut (DevSecOps)** - mTLS partout (PKI Vault), secrets chiffrés (SOPS+age),
    NetworkPolicies deny-by-default, RBAC strict, policy-as-code (Kyverno/OPA), supply chain
    signée (SBOM + Cosign), scans intégrés à la CI.
-4. **Air-gap pour les VMs** — les VMs ne communiquent jamais avec l'extérieur ; elles tirent les
+4. **Air-gap pour les VMs** - les VMs ne communiquent jamais avec l'extérieur ; elles tirent les
    packages OTel depuis un dépôt interne (Harbor/Nexus) et sont gérées par **Ansible**.
-5. **Variabilité isolée** — toute la configuration spécifique à un environnement (credentials,
+5. **Variabilité isolée** - toute la configuration spécifique à un environnement (credentials,
    domaines, sizing, endpoints) vit dans `environments/<env>/`. Le code est identique partout.
-6. **Reproductibilité** — Terraform (socle) + FluxCD/Helm (plateforme) + Ansible (VMs),
+6. **Reproductibilité** - Terraform (socle) + FluxCD/Helm (plateforme) + Ansible (VMs),
    versionnés, validés et signés.
 
 ## 3. Décisions tranchées
@@ -51,8 +51,8 @@ explicites. Ordre de construction respectant les dépendances :
 
 | # | Brique | Dossier | Dépend de | Rôle |
 |---|---|---|---|---|
-| B0 | Socle repo / Makefile / CI / PR | racine, `.github/`, `ci/` | — | Orchestration, garde-fous, workflow Git |
-| B1 | Provisioning cluster | `bootstrap/00-cluster` | — | K8s (kubeadm on-prem, pluggable) |
+| B0 | Socle repo / Makefile / CI / PR | racine, `.github/`, `ci/` | - | Orchestration, garde-fous, workflow Git |
+| B1 | Provisioning cluster | `bootstrap/00-cluster` | - | K8s (kubeadm on-prem, pluggable) |
 | B2 | Vault + PKI + auth | `bootstrap/10-vault` | B1 | Secrets, PKI mTLS, LDAP/AD |
 | B3 | Bootstrap FluxCD | `bootstrap/20-flux` | B1 | GitOps engine |
 | B4 | Dépôt packages | `bootstrap/30-package-repo` | B1 | Harbor/Nexus (packages OTel) |
@@ -77,7 +77,7 @@ VMs (agent OTel, air-gap)
                   ├─ logs    ─▶ Loki  ─┐
                   ├─ metrics ─▶ Mimir ─┼─▶ MinIO (S3 long terme)
                   └─ traces  ─▶ Tempo ─┘
-                                   └─▶ Grafana (visualisation unifiée)
+                                   └─▶ Grafana (visualisation unifiée) ─▶ OneUptime ─▶ GLPI + notifications
 Prometheus ─▶ Alertmanager ─▶ OneUptime ─▶ GLPI + notifications
 ```
 
@@ -132,7 +132,7 @@ observability-platform/
 
 1. `make validate` passe (lint + kubeconform + scans) sur l'ensemble du repo.
 2. Un nouvel environnement se crée en copiant `environments/_template/` et en remplissant
-   **uniquement** les credentials/valeurs — aucun autre fichier à toucher.
+   **uniquement** les credentials/valeurs - aucun autre fichier à toucher.
 3. `make bootstrap && make deploy` documenté de bout en bout (cluster → Vault → Flux → plateforme).
 4. Chaîne mTLS documentée et cohérente de l'agent jusqu'aux backends.
 5. CI/CD avec tous les gates de sécurité et workflow PR opérationnels.
