@@ -75,17 +75,14 @@ export default function LoginPage() {
           {/* Méthode recommandée : OAuth GitHub (aucun jeton à saisir) */}
           <div className="card space-y-3">
             <h2 className="text-sm font-medium text-slate-300">Recommandé</h2>
-            <a
-              href="/api/auth/oauth/start"
-              className={`btn w-full ${oauth ? "" : "pointer-events-none opacity-40"}`}
-            >
+            <a href="/api/auth/oauth/start" className="btn w-full">
               <Github className="h-4 w-4" />
               Se connecter avec GitHub
             </a>
             {!oauth && (
-              <p className="text-xs text-slate-500">
-                Connexion GitHub non configurée sur ce serveur. Utilisez un jeton ci-dessous, ou
-                configurez une OAuth App (voir documentation).
+              <p className="text-xs text-warn">
+                ⚠️ Connexion GitHub pas encore configurée sur ce serveur (OAuth App manquante).
+                Utilisez le jeton ci-dessous, ou configurez l&apos;OAuth App pour activer ce bouton.
               </p>
             )}
           </div>
