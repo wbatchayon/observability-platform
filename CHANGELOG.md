@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/wbatchayon/observability-platform/compare/v0.1.1...v0.1.2) (2026-06-20)
+
+
+### 🐛 Corrections
+
+* **ci:** artefacts de release résilients ([0cbfa56](https://github.com/wbatchayon/observability-platform/commit/0cbfa560552fd7944b33eff078f87272d0c57375))
+* **ci:** job d'artefacts de release résilient (signature best-effort, publication des artefacts présents) ([805d0aa](https://github.com/wbatchayon/observability-platform/commit/805d0aa2ebbc2d78d4af001e63b47f9f057169b2))
+
 ## [0.1.1](https://github.com/wbatchayon/observability-platform/compare/v0.1.0...v0.1.1) (2026-06-20)
 
 
