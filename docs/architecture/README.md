@@ -2,8 +2,11 @@
 
 Plateforme d'observabilité 100% open source, GitOps et DevSecOps, reproductible par environnement.
 
-![Architecture](../imgs/architecture.mmd)
-*(rendre `docs/imgs/architecture.mmd` en SVG pour l'affichage — voir `docs/imgs/README.md`)*
+![Architecture](../imgs/architecture.png)
+
+**Flux de données (animé)** :
+
+![Flux de données](../imgs/data-flow.gif)
 
 ## Couches
 
