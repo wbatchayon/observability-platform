@@ -25,10 +25,27 @@ GitHub.
 |---|---|
 | `SESSION_SECRET` | clé de chiffrement de session (≥ 32 caractères) |
 | `GITHUB_REPOSITORY` | dépôt cible au format `owner/repo` |
+| `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | (optionnel) active la connexion « Se connecter avec GitHub » (OAuth App) |
+| `GUI_BASE_URL` | (optionnel) URL publique de la console pour le callback OAuth (sinon dérivée des en-têtes) |
 | `DEPLOY_REF` | (optionnel) ref Git ciblée par les dispatch (défaut `main`) |
 | `ALLOWED_GITHUB_LOGINS` | (optionnel) allowlist de logins autorisés (séparés par des virgules) |
 | `ALLOWED_GITHUB_ORG` | (optionnel) organisation dont l'appartenance autorise l'accès |
 | `TOOL_GRAFANA_URL`, `TOOL_PROMETHEUS_URL`, `TOOL_ALERTMANAGER_URL`, `TOOL_ONEUPTIME_URL`, `TOOL_GLPI_URL`, `TOOL_SLACK_URL`, `TOOL_HARBOR_URL`, `TOOL_VAULT_URL`, `TOOL_MINIO_URL`, `TOOL_RENOVATE_URL` | URLs des outils déployés (page **Outils**) |
+
+## Connexion
+
+Deux méthodes :
+
+1. **OAuth GitHub** (recommandé, sans jeton) : bouton « Se connecter avec GitHub ». Nécessite une
+   **OAuth App** GitHub :
+   - Settings → Developer settings → OAuth Apps → New OAuth App
+   - Homepage URL : `https://<votre-domaine>`
+   - Authorization callback URL : `https://<votre-domaine>/api/auth/oauth/callback`
+   - Renseigner `GITHUB_OAUTH_CLIENT_ID` et `GITHUB_OAUTH_CLIENT_SECRET` (et `GUI_BASE_URL`).
+2. **Jeton personnel** : la page de connexion propose un lien « Générer un jeton » avec les portées
+   `repo` et `workflow` pré-remplies.
+
+Dans les deux cas, l'accès exige un droit en écriture sur le dépôt (cf. contrôle d'accès).
 
 ## Développement
 

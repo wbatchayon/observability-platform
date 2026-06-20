@@ -17,7 +17,8 @@ deploy.yaml ─ validate (runner hébergé) | bootstrap/deploy (runner self-host
 
 ## Parcours utilisateur
 
-1. **Compte** : coller un token GitHub (scope `repo`, `workflow`) → session chiffrée.
+1. **Connexion** : « Se connecter avec GitHub » (**OAuth**, recommandé) ou un **jeton personnel**
+   (lien de génération fourni) → session chiffrée. L'accès exige un droit en écriture sur le dépôt.
 2. **Configuration** : saisir les valeurs d'un environnement → validées (zod) → **PR** créée
    automatiquement (aucune édition manuelle de fichier).
 3. **Credentials** : saisir les secrets → posés en **GitHub Environment Secrets** (chiffrés, scopés

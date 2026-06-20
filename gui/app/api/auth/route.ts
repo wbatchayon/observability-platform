@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { client, isAuthorized } from "@/lib/github";
+import { oauthEnabled } from "@/lib/oauth";
 import { isConfigError, configError, serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
-// Statut de session.
+// Statut de session + méthodes de connexion disponibles.
 export async function GET() {
   try {
     const session = await getSession();
-    return NextResponse.json({ authenticated: !!session.token, login: session.login || null });
+    return NextResponse.json({
+      authenticated: !!session.token,
+      login: session.login || null,
+      oauthEnabled: oauthEnabled(),
+    });
   } catch (e) {
     if (isConfigError(e)) return configError(e);
     return serverError("auth.get", e);
