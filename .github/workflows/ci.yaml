@@ -2,8 +2,9 @@
 name: CI
 
 "on":
+  # Toutes les PR (y compris les PR empilées vers une branche de feature), pas seulement vers main.
   pull_request:
-    branches: [main]
+    types: [opened, synchronize, reopened]
   push:
     branches: [main]
 
