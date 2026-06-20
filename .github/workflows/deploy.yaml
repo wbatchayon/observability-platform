@@ -1,0 +1,51 @@
+---
+# Pipeline déclenchable (workflow_dispatch) — cible des actions de la console GUI.
+# La GUI appelle l'API GitHub pour lancer ce workflow avec un environnement + une action.
+name: Deploy
+
+"on":
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environnement cible"
+        type: choice
+        required: true
+        default: dev
+        options: [dev, staging, prod]
+      action:
+        description: "Action à exécuter"
+        type: choice
+        required: true
+        default: validate
+        options: [validate, bootstrap, deploy]
+
+permissions:
+  contents: read
+
+jobs:
+  # validate : vérifications uniquement (pas d'accès à l'infra) — runner GitHub hébergé.
+  validate:
+    if: ${{ inputs.action == 'validate' }}
+    name: Validate (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
+      - name: make validate
+        run: make validate ENV=${{ inputs.environment }}
+
+  # bootstrap/deploy : exécution sur runner SELF-HOSTED (accès au cluster air-gap).
+  apply:
+    if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
+    name: ${{ inputs.action }} (${{ inputs.environment }})
+    runs-on: [self-hosted, observability]
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Exécuter l'action
+        # Les credentials (TF_VAR_*, clé SOPS) sont fournis au runner via les secrets de
+        # l'Environment GitHub correspondant (posés par la console GUI) ou via Vault interne.
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: make ${{ inputs.action }} ENV=${{ inputs.environment }}
