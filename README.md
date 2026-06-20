@@ -32,12 +32,6 @@ ansible-playbook -i ansible/inventories/prod ansible/playbooks/install-agent.yam
 
 ## 🏗️ Architecture
 
-![Architecture](docs/imgs/architecture.png)
-
-**Flux de données (animé)** :
-
-![Flux de données](docs/imgs/data-flow.gif)
-
 ```
 VMs (agent OTel, air-gap) ──OTLP/mTLS──▶ Edge Collector (par DC)
    ──▶ HAProxy/LB (TLS) ──▶ OTel Gateway x3 (filter/batch/enrich/sampling/queues)

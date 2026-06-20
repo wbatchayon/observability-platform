@@ -49,7 +49,8 @@ Un échec **bloque le merge**.
 ## Automatisation par PR
 
 - **Renovate** — PRs de mise à jour des dépendances (Terraform, charts Helm, images, GitHub
-  Actions). Minor/patch sûrs en auto-merge, majeures en revue humaine.
+  Actions). Minor/patch sûrs en auto-merge, majeures en revue humaine. Responsabilités et cadence
+  d'approbation : voir le [RACI des montées de version](../governance/raci-version-upgrades.md).
 - **Flux Image Automation** — ouvre une PR quand une nouvelle image **signée** est disponible
   dans le dépôt interne.
 - **Drift detection** — Flux alerte si l'état du cluster diverge de Git.
