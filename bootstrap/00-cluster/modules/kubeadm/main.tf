@@ -28,22 +28,57 @@ resource "null_resource" "containerd_mirror" {
   }
 
   provisioner "remote-exec" {
-    inline = concat(
-      ["set -e", "sudo mkdir -p /etc/containerd/certs.d"],
-      flatten([
-        for reg in local.mirrored_registries : [
-          "sudo mkdir -p /etc/containerd/certs.d/${reg}",
-          "echo 'server = \"https://${var.registry_mirror}\"' | sudo tee /etc/containerd/certs.d/${reg}/hosts.toml",
-          "echo '[host.\"https://${var.registry_mirror}\"]' | sudo tee -a /etc/containerd/certs.d/${reg}/hosts.toml",
-          "echo '  capabilities = [\"pull\", \"resolve\"]' | sudo tee -a /etc/containerd/certs.d/${reg}/hosts.toml",
-          "echo '  override_path = true' | sudo tee -a /etc/containerd/certs.d/${reg}/hosts.toml",
-        ]
-      ]),
-      [
-        "sudo sed -i 's#config_path = \"\"#config_path = \"/etc/containerd/certs.d\"#' /etc/containerd/config.toml || true",
-        "sudo systemctl restart containerd",
-      ]
-    )
+    # Configuration idempotente et robuste du miroir containerd -> Harbor (air-gap strict).
+    inline = [
+      <<-EOT
+      set -euo pipefail
+      MIRROR="${var.registry_mirror}"
+      REGISTRIES="${join(" ", local.mirrored_registries)}"
+      CONF=/etc/containerd/config.toml
+
+      # 0. Garantir l'existence d'une config containerd de base.
+      sudo mkdir -p /etc/containerd /etc/containerd/certs.d
+      if [ ! -f "$CONF" ] || ! grep -q 'io.containerd.grpc.v1.cri' "$CONF"; then
+        containerd config default | sudo tee "$CONF" >/dev/null
+      fi
+
+      # 1. Activer config_path (certs.d) de façon idempotente, quel que soit l'état initial.
+      if ! grep -q 'config_path = "/etc/containerd/certs.d"' "$CONF"; then
+        if grep -q '\[plugins."io.containerd.grpc.v1.cri".registry\]' "$CONF"; then
+          # Remplacer un config_path existant (souvent "") dans la section registry.
+          sudo sed -i '/\[plugins."io.containerd.grpc.v1.cri".registry\]/,/^\[/ s#config_path = .*#config_path = "/etc/containerd/certs.d"#' "$CONF"
+          # Si toujours absent, l'insérer juste après l'en-tête de section.
+          grep -q 'config_path = "/etc/containerd/certs.d"' "$CONF" || \
+            sudo sed -i '/\[plugins."io.containerd.grpc.v1.cri".registry\]/a\    config_path = "/etc/containerd/certs.d"' "$CONF"
+        else
+          # Section registry absente : l'ajouter.
+          printf '\n[plugins."io.containerd.grpc.v1.cri".registry]\n  config_path = "/etc/containerd/certs.d"\n' | sudo tee -a "$CONF" >/dev/null
+        fi
+      fi
+
+      # 2. Rediriger l'image sandbox (pause) vers Harbor.
+      if grep -q 'sandbox_image' "$CONF"; then
+        sudo sed -i "s#sandbox_image = .*#sandbox_image = \"$MIRROR/library/pause:3.9\"#" "$CONF"
+      fi
+
+      # 3. Écrire un hosts.toml par registre public, pointant vers Harbor.
+      for reg in $REGISTRIES; do
+        sudo mkdir -p "/etc/containerd/certs.d/$reg"
+        sudo tee "/etc/containerd/certs.d/$reg/hosts.toml" >/dev/null <<HOSTS
+      server = "https://$MIRROR"
+
+      [host."https://$MIRROR"]
+        capabilities = ["pull", "resolve"]
+        override_path = true
+      HOSTS
+      done
+
+      # 4. Vérification stricte : config_path doit être actif, sinon échec (pas de fallback Internet).
+      grep -q 'config_path = "/etc/containerd/certs.d"' "$CONF" || { echo "ECHEC: config_path containerd non configuré" >&2; exit 1; }
+
+      sudo systemctl restart containerd
+      EOT
+    ]
   }
 }
 

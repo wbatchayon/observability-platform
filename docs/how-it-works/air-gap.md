@@ -5,10 +5,21 @@ sont **importés dans Harbor**, et tous les composants les tirent depuis Harbor.
 
 ## Trois mécanismes complémentaires
 
-1. **Miroir containerd → Harbor** (niveau nœud). `bootstrap/00-cluster` configure
-   `/etc/containerd/certs.d/<registry>/hosts.toml` sur chaque nœud pour rediriger `docker.io`,
-   `quay.io`, `ghcr.io`, `registry.k8s.io` vers `harbor.observability.internal`. Toute image,
-   même nommée publiquement, est résolue via Harbor.
+1. **Miroir containerd → Harbor** (niveau nœud). `bootstrap/00-cluster` configure de façon
+   **idempotente et stricte** sur chaque nœud :
+   - `config_path = "/etc/containerd/certs.d"` (créé si absent ; section registry ajoutée au besoin) ;
+   - un `hosts.toml` par registre public (`docker.io`, `quay.io`, `ghcr.io`, `registry.k8s.io`)
+     redirigeant vers `harbor.observability.internal` (`override_path = true`) ;
+   - `sandbox_image` (pause) pointé vers `…/library/pause:3.9` ;
+   - **vérification bloquante** : si `config_path` n'est pas actif, le provisioning échoue
+     (aucun fallback vers Internet).
+
+   Toute image, même nommée publiquement, est donc résolue via Harbor.
+
+   > **Pré-requis Harbor** : créer les projets **proxy-cache** correspondants (ou pré-pousser les
+   > images) afin que les chemins `docker.io/…`, `quay.io/…`, etc. soient servis par Harbor. En
+   > air-gap strict (sans upstream pour le proxy-cache), les images sont **pré-poussées** sous les
+   > mêmes chemins.
 2. **Charts Helm en OCI depuis Harbor.** Tous les `HelmRepository` Flux sont
    `type: oci`, `url: oci://${HARBOR_REGISTRY}/charts`. Aucun dépôt de charts public.
 3. **Packages OTel des VMs** tirés du dépôt interne signé (apt/yum/tar.gz), agents air-gap.
