@@ -61,8 +61,9 @@ export default function LoginPage() {
               onChange={(e) => setToken(e.target.value)}
             />
             <p className="text-xs text-slate-500 mt-1">
-              Le jeton reste dans une session chiffrée (cookie httpOnly) et n&apos;est jamais stocké
-              côté serveur.
+              Accès réservé aux utilisateurs disposant d&apos;un accès en écriture au dépôt. Le jeton
+              reste dans une session chiffrée (cookie httpOnly) et n&apos;est jamais stocké côté
+              serveur.
             </p>
           </div>
           <button onClick={connect} disabled={busy || !token} className="btn">

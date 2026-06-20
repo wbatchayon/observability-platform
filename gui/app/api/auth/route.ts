@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { client } from "@/lib/github";
+import { client, isAuthorized } from "@/lib/github";
 import { isConfigError, configError, serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -21,19 +21,38 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const token = typeof body.token === "string" ? body.token.trim() : "";
   if (!token) {
-    return NextResponse.json({ error: "Token requis" }, { status: 400 });
+    return NextResponse.json({ error: "Jeton requis" }, { status: 400 });
   }
+
+  const octo = client(token);
+
+  // 1. Le jeton est-il valide ?
+  let login: string;
   try {
-    const octo = client(token);
     const { data } = await octo.users.getAuthenticated();
-    const session = await getSession();
-    session.token = token;
-    session.login = data.login;
-    await session.save();
-    return NextResponse.json({ authenticated: true, login: data.login });
+    login = data.login;
   } catch {
-    return NextResponse.json({ error: "Token GitHub invalide" }, { status: 401 });
+    return NextResponse.json({ error: "Jeton GitHub invalide" }, { status: 401 });
   }
+
+  // 2. L'utilisateur est-il autorisé (allowlist / org / accès en écriture au dépôt) ?
+  try {
+    if (!(await isAuthorized(octo, login))) {
+      return NextResponse.json(
+        { error: "Accès refusé : un accès en écriture au dépôt (ou une autorisation explicite) est requis." },
+        { status: 403 },
+      );
+    }
+  } catch (e) {
+    if (isConfigError(e)) return configError(e);
+    return serverError("auth.authorize", e);
+  }
+
+  const session = await getSession();
+  session.token = token;
+  session.login = login;
+  await session.save();
+  return NextResponse.json({ authenticated: true, login });
 }
 
 // Déconnexion.

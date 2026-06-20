@@ -20,6 +20,39 @@ export function client(token: string): Octokit {
   return new Octokit({ auth: token });
 }
 
+// Contrôle d'accès applicatif : seuls les utilisateurs autorisés peuvent ouvrir une session.
+// Ordre : allowlist de logins -> appartenance à une organisation -> accès en écriture au dépôt.
+export async function isAuthorized(octo: Octokit, login: string): Promise<boolean> {
+  const allowedLogins = (process.env.ALLOWED_GITHUB_LOGINS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (allowedLogins.length > 0) {
+    return allowedLogins.includes(login);
+  }
+
+  const allowedOrg = process.env.ALLOWED_GITHUB_ORG;
+  if (allowedOrg) {
+    try {
+      await octo.orgs.checkMembershipForUser({ org: allowedOrg, username: login });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Par défaut : accès en écriture (push/maintain/admin) au dépôt cible, évalué avec le jeton
+  // de l'utilisateur (repos.get renvoie ses permissions ; lève si pas d'accès).
+  try {
+    const { owner, repo } = targetRepo();
+    const { data } = await octo.repos.get({ owner, repo });
+    const p = data.permissions;
+    return !!(p && (p.admin || p.push || p.maintain));
+  } catch {
+    return false;
+  }
+}
+
 function seal(value: string, publicKeyB64: string): string {
   const messageBytes = Buffer.from(value, "utf-8");
   const keyBytes = Buffer.from(publicKeyB64, "base64");

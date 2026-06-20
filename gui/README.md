@@ -26,6 +26,8 @@ GitHub.
 | `SESSION_SECRET` | clé de chiffrement de session (≥ 32 caractères) |
 | `GITHUB_REPOSITORY` | dépôt cible au format `owner/repo` |
 | `DEPLOY_REF` | (optionnel) ref Git ciblée par les dispatch (défaut `main`) |
+| `ALLOWED_GITHUB_LOGINS` | (optionnel) allowlist de logins autorisés (séparés par des virgules) |
+| `ALLOWED_GITHUB_ORG` | (optionnel) organisation dont l'appartenance autorise l'accès |
 | `TOOL_GRAFANA_URL`, `TOOL_PROMETHEUS_URL`, `TOOL_ALERTMANAGER_URL`, `TOOL_ONEUPTIME_URL`, `TOOL_GLPI_URL`, `TOOL_SLACK_URL`, `TOOL_HARBOR_URL`, `TOOL_VAULT_URL`, `TOOL_MINIO_URL`, `TOOL_RENOVATE_URL` | URLs des outils déployés (page **Outils**) |
 
 ## Développement
@@ -64,6 +66,10 @@ NetworkPolicies, Ingress). Image tirée depuis Harbor (air-gap). Voir
 
 ## Sécurité
 
-- Token utilisateur en session chiffrée (jamais loggé, jamais persisté).
+- **Contrôle d'accès** : seuls les utilisateurs disposant d'un accès en écriture au dépôt (ou
+  figurant dans `ALLOWED_GITHUB_LOGINS` / membres de `ALLOWED_GITHUB_ORG`) peuvent ouvrir une
+  session. La connexion est refusée (403) sinon.
+- En-têtes de sécurité (CSP, X-Frame-Options DENY, HSTS, etc.).
+- Jeton utilisateur en session chiffrée (jamais loggé, jamais persisté).
 - Secrets via sealed box → GitHub Secrets (jamais en clair).
 - Validation systématique des entrées (zod) ; conteneur non-root, lecture seule.
