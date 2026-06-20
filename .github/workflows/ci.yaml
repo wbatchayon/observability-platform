@@ -161,9 +161,11 @@ jobs:
         uses: sigstore/cosign-installer@v4.1.2
       - name: Sign SBOM (keyless OIDC)
         if: github.event_name == 'push'
-        continue-on-error: true
-        run: cosign sign-blob --yes observability-platform.sbom.json \
-          --output-signature observability-platform.sbom.sig
+        run: |
+          set +e
+          cosign sign-blob --yes observability-platform.sbom.json \
+            --output-signature observability-platform.sbom.sig
+          exit 0
       - uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
