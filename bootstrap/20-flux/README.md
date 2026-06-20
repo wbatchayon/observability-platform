@@ -11,14 +11,19 @@ injectant l'overlay de l'environnement (`environments/<env>/`).
 
 ## Comment l'overlay d'environnement est appliqué
 
-La `Kustomization` racine (`kustomizations.yaml`) utilise `postBuild.substituteFrom` : les
-variables `${...}` des manifests `platform/` sont résolues depuis :
+Le bootstrap Flux réconcilie le chemin **`clusters/<env>/`**. Celui-ci définit :
 
-- le **ConfigMap `env-values`** (valeurs non sensibles de `environments/<env>/*.values.yaml`),
-- le **Secret `env-secrets`** (valeurs sensibles déchiffrées depuis SOPS).
+1. la `GitRepository` source,
+2. une Kustomization **`env-config`** qui applique `environments/<env>/` (ConfigMap `env-values` +
+   Secret `env-secrets` **déchiffré par SOPS** via `decryption.provider: sops`, secret `sops-age`),
+3. une Kustomization **`platform`** (`dependsOn: env-config`) qui réconcilie `./platform` avec
+   `postBuild.substituteFrom` des variables `${...}` depuis `env-values`/`env-secrets`.
 
 Ainsi le même code `platform/` produit un déploiement spécifique par environnement, sans
 duplication.
+
+> Prérequis : créer le secret de déchiffrement SOPS dans `flux-system` :
+> `kubectl -n flux-system create secret generic sops-age --from-file=age.agekey=$SOPS_AGE_KEY_FILE`
 
 ## Utilisation
 

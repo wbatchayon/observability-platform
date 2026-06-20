@@ -15,17 +15,25 @@ spec:
         kind: HelmRepository
         name: opentelemetry
   values:
-    mode: deployment
+    # StatefulSet : file persistante sur PVC (survie aux redémarrages), pas emptyDir.
+    mode: statefulset
     replicaCount: ${OTEL_EDGE_REPLICAS}
     image:
       repository: harbor.observability.internal/otel-packages/opentelemetry-collector-contrib
       tag: "0.148.0"
+    statefulset:
+      volumeClaimTemplates:
+        - metadata:
+            name: queue
+          spec:
+            accessModes: [ReadWriteOnce]
+            resources:
+              requests:
+                storage: 5Gi
     extraVolumes:
       - name: tls
         secret:
           secretName: otel-edge-tls
-      - name: queue
-        emptyDir: {}
     extraVolumeMounts:
       - name: tls
         mountPath: /etc/otel/tls

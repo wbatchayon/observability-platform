@@ -5,6 +5,9 @@ kind: AlertmanagerConfig
 metadata:
   name: observability-routing
   namespace: monitoring
+  labels:
+    # Sélectionné par kube-prometheus-stack (alertmanagerConfigSelector).
+    alertmanagerConfig: observability
 spec:
   route:
     groupBy: ["alertname", "namespace", "severity"]

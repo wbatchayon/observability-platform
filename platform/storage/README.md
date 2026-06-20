@@ -7,7 +7,7 @@ traces (Loki/Mimir/Tempo y déposent leurs blocks).
 
 | Interface | Valeur |
 |---|---|
-| Endpoint S3 | `http://minio.storage.svc.cluster.local:9000` (TLS interne) |
+| Endpoint S3 | `https://minio.storage.svc.cluster.local:9000` (TLS interne, certif `vault-issuer`) |
 | Buckets | `loki`, `mimir`, `tempo` (versioning activé) |
 | Secret | `minio-credentials` (clés `accesskey` / `secretkey`) |
 

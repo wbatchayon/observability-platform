@@ -12,6 +12,21 @@ resource "harbor_project" "otel_packages" {
   vulnerability_scanning = true
 }
 
+# Projet des charts Helm (OCI) en lecture publique INTERNE : permet le pull anonyme par
+# FluxCD/Helm depuis le réseau privé, sans secret de pull dans chaque namespace.
+resource "harbor_project" "charts" {
+  name                   = "charts"
+  public                 = true
+  vulnerability_scanning = true
+}
+
+# Projet miroir des images (library) — lecture publique interne pour le miroir containerd.
+resource "harbor_project" "library" {
+  name                   = "library"
+  public                 = true
+  vulnerability_scanning = true
+}
+
 # Compte robot read-only : utilisé par les VMs (via Ansible) pour tirer les packages.
 # Le token a une durée de vie bornée (rotation) — voir robot_token_rotation_days.
 resource "time_rotating" "robot" {

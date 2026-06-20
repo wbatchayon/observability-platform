@@ -49,3 +49,10 @@ spec:
       enabled: false        # Grafana est géré par platform/visualization
     alertmanager:
       enabled: true
+      alertmanagerSpec:
+        # Sélectionne notre AlertmanagerConfig (label alertmanagerConfig: observability).
+        alertmanagerConfigSelector:
+          matchLabels:
+            alertmanagerConfig: observability
+        alertmanagerConfigMatcherStrategy:
+          type: None

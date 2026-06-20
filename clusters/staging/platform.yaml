@@ -1,0 +1,66 @@
+---
+# Source Git unique du dépôt GitOps.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: observability-platform
+  namespace: flux-system
+spec:
+  interval: 5m
+  ref:
+    branch: main
+  url: https://github.com/org/observability-platform
+  secretRef:
+    name: flux-system
+---
+# 1. Applique l'overlay d'environnement : ConfigMap env-values + Secret env-secrets (déchiffré SOPS).
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: env-config
+  namespace: flux-system
+spec:
+  interval: 10m
+  prune: true
+  sourceRef:
+    kind: GitRepository
+    name: observability-platform
+  path: ./environments/staging
+  decryption:
+    provider: sops
+    secretRef:
+      name: sops-age
+---
+# 2. Réconcilie la plateforme en substituant les variables depuis env-values/env-secrets.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: platform
+  namespace: flux-system
+spec:
+  interval: 10m
+  retryInterval: 2m
+  timeout: 5m
+  prune: true
+  wait: true
+  dependsOn:
+    - name: env-config
+  sourceRef:
+    kind: GitRepository
+    name: observability-platform
+  path: ./platform
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: env-values
+      - kind: Secret
+        name: env-secrets
+  healthChecks:
+    - apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      name: loki
+      namespace: backends
+    - apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      name: grafana
+      namespace: visualization

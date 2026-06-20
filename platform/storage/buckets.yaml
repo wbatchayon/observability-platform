@@ -24,7 +24,10 @@ spec:
             - -c
             - |
               set -e
-              mc alias set minio https://minio.storage.svc.cluster.local:9000 "$ACCESS_KEY" "$SECRET_KEY"
+              # Attendre que MinIO (TLS) soit prêt avant de créer les buckets.
+              until mc alias set minio https://minio.storage.svc.cluster.local:9000 "$ACCESS_KEY" "$SECRET_KEY"; do
+                echo "MinIO indisponible, nouvelle tentative dans 5s..."; sleep 5
+              done
               for b in loki mimir tempo; do
                 mc mb --ignore-existing "minio/$b"
                 mc version enable "minio/$b"
