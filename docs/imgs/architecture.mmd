@@ -41,7 +41,7 @@ flowchart LR
   subgraph INC["ns: incident"]
     OU["OneUptime"]
     GL["GLPI"]
-    NT["Notifications"]
+    SL["Slack (astreinte)"]
   end
 
   OTEL -->|OTLP/mTLS| EDGE
@@ -57,8 +57,9 @@ flowchart LR
   M --> GF
   T --> GF
   P --> AM
-  AM --> OU
-  OU --> GL
-  OU --> NT
+  AM -->|webhook| OU
+  OU -->|ticket| GL
+  OU -->|majeur/astreinte| SL
+  OU -.->|relais si AM down| AM
   CM -.->|mTLS certs| GW
   CM -.->|mTLS certs| BK

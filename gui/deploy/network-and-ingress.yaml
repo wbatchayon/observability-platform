@@ -1,0 +1,105 @@
+---
+# Deny-by-default sur le namespace gui.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: gui
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# DNS sortant.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: gui
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Egress HTTPS (API GitHub) — en air-gap, restreindre à la passerelle interne.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-https-egress
+  namespace: gui
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443
+---
+# Entrée depuis l'ingress HAProxy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-gui
+  namespace: gui
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress
+---
+# Certificat TLS via la PKI Vault.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: gui-tls
+  namespace: gui
+spec:
+  secretName: gui-tls
+  duration: 2160h
+  renewBefore: 360h
+  issuerRef:
+    name: vault-issuer
+    kind: ClusterIssuer
+  commonName: ${GUI_DOMAIN}
+  dnsNames:
+    - ${GUI_DOMAIN}
+  usages:
+    - server auth
+    - digital signature
+    - key encipherment
+---
+# Route HTTPS publique vers la console.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: observability-gui
+  namespace: gui
+  annotations:
+    haproxy.org/server-ssl: "true"
+spec:
+  ingressClassName: haproxy
+  tls:
+    - hosts: ["${GUI_DOMAIN}"]
+      secretName: gui-tls
+  rules:
+    - host: ${GUI_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: observability-gui
+                port:
+                  number: 443

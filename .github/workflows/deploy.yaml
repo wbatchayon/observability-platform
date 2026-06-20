@@ -1,0 +1,77 @@
+---
+# Pipeline déclenchable (workflow_dispatch) — cible des actions de la console GUI.
+# La GUI appelle l'API GitHub pour lancer ce workflow avec un environnement + une action.
+name: Deploy
+
+"on":
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environnement cible"
+        type: choice
+        required: true
+        default: dev
+        options: [dev, staging, prod]
+      action:
+        description: "Action à exécuter"
+        type: choice
+        required: true
+        default: validate
+        options: [validate, bootstrap, deploy]
+
+permissions:
+  contents: read
+
+jobs:
+  # validate : vérifications uniquement (pas d'accès à l'infra) — runner GitHub hébergé.
+  validate:
+    if: ${{ inputs.action == 'validate' }}
+    name: Validate (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
+      - name: make validate
+        run: make validate ENV=${{ inputs.environment }}
+
+  # bootstrap/deploy : exécution sur runner SELF-HOSTED (accès au cluster air-gap).
+  apply:
+    if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
+    name: ${{ inputs.action }} (${{ inputs.environment }})
+    runs-on: [self-hosted, observability]
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v5
+      # Matérialise le Secret `env-secrets` (consommé par la substitution Flux) à partir des
+      # secrets de l'Environment GitHub posés par la console GUI -> les credentials saisis dans
+      # l'UI atteignent réellement le déploiement.
+      - name: Matérialiser env-secrets dans le cluster
+        if: ${{ inputs.action == 'deploy' }}
+        env:
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_OAUTH_CLIENT_SECRET: ${{ secrets.GRAFANA_OAUTH_CLIENT_SECRET }}
+          GLPI_DB_ROOT_PASSWORD: ${{ secrets.GLPI_DB_ROOT_PASSWORD }}
+          GLPI_DB_PASSWORD: ${{ secrets.GLPI_DB_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: |
+          kubectl -n flux-system create secret generic env-secrets \
+            --from-literal=MINIO_ACCESS_KEY="$MINIO_ACCESS_KEY" \
+            --from-literal=MINIO_SECRET_KEY="$MINIO_SECRET_KEY" \
+            --from-literal=GRAFANA_ADMIN_PASSWORD="$GRAFANA_ADMIN_PASSWORD" \
+            --from-literal=GRAFANA_OAUTH_CLIENT_SECRET="$GRAFANA_OAUTH_CLIENT_SECRET" \
+            --from-literal=GLPI_DB_ROOT_PASSWORD="$GLPI_DB_ROOT_PASSWORD" \
+            --from-literal=GLPI_DB_PASSWORD="$GLPI_DB_PASSWORD" \
+            --from-literal=SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL" \
+            --from-literal=TEAMS_WEBHOOK_URL="$TEAMS_WEBHOOK_URL" \
+            --from-literal=SMTP_PASSWORD="$SMTP_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+      - name: Exécuter l'action
+        # Clé SOPS fournie au runner pour les secrets gérés hors GUI (le cas échéant).
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: make ${{ inputs.action }} ENV=${{ inputs.environment }}

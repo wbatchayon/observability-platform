@@ -1,0 +1,32 @@
+---
+# CI de la console de management (build Next.js).
+name: GUI CI
+
+"on":
+  pull_request:
+    paths: ["gui/**", ".github/workflows/gui-ci.yaml"]
+  push:
+    branches: [main]
+    paths: ["gui/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gui
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build

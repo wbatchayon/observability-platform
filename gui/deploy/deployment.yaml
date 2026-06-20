@@ -1,0 +1,119 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gui
+  labels:
+    app.kubernetes.io/part-of: observability
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gui-config
+  namespace: gui
+type: Opaque
+stringData:
+  # Injectés via SOPS/substitution Flux — jamais en clair dans Git.
+  SESSION_SECRET: ${GUI_SESSION_SECRET}
+  GITHUB_REPOSITORY: ${GUI_GITHUB_REPOSITORY}
+---
+# URLs des outils (non sensibles) — page "Outils". Dérivées des domaines d'environnement.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gui-tools
+  namespace: gui
+data:
+  TOOL_GRAFANA_URL: "https://${GRAFANA_DOMAIN}"
+  TOOL_PROMETHEUS_URL: "${TOOL_PROMETHEUS_URL}"
+  TOOL_ALERTMANAGER_URL: "${TOOL_ALERTMANAGER_URL}"
+  TOOL_ONEUPTIME_URL: "${TOOL_ONEUPTIME_URL}"
+  TOOL_GLPI_URL: "${TOOL_GLPI_URL}"
+  TOOL_HARBOR_URL: "https://${HARBOR_REGISTRY}"
+  TOOL_VAULT_URL: "${VAULT_ADDR}"
+  TOOL_MINIO_URL: "${TOOL_MINIO_URL}"
+  TOOL_SLACK_URL: "${TOOL_SLACK_URL}"
+  # Patch management : tableau de bord Renovate (dependency dashboard du dépôt).
+  TOOL_RENOVATE_URL: "https://github.com/${GUI_GITHUB_REPOSITORY}/issues?q=is%3Aissue+Dependency+Dashboard"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observability-gui
+  namespace: gui
+  labels:
+    app: observability-gui
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: observability-gui
+  template:
+    metadata:
+      labels:
+        app: observability-gui
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gui
+          image: ${HARBOR_REGISTRY}/library/observability-gui:0.1.0
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: gui-config
+            - configMapRef:
+                name: gui-tools
+          livenessProbe:
+            httpGet:
+              path: /api/auth
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /api/auth
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: 192Mi
+              cpu: 100m
+            limits:
+              memory: 384Mi
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: cache
+              mountPath: /app/.next/cache
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: observability-gui
+  namespace: gui
+spec:
+  selector:
+    app: observability-gui
+  ports:
+    - port: 443
+      targetPort: 3000
