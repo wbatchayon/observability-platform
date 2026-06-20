@@ -72,24 +72,22 @@ export default function LoginPage() {
         </div>
       ) : (
         <>
-          {/* Méthode recommandée : OAuth GitHub (aucun jeton à saisir) */}
-          <div className="card space-y-3">
-            <h2 className="text-sm font-medium text-slate-300">Recommandé</h2>
-            <a href="/api/auth/oauth/start" className="btn w-full">
-              <Github className="h-4 w-4" />
-              Se connecter avec GitHub
-            </a>
-            {!oauth && (
-              <p className="text-xs text-warn">
-                ⚠️ Connexion GitHub pas encore configurée sur ce serveur (OAuth App manquante).
-                Utilisez le jeton ci-dessous, ou configurez l&apos;OAuth App pour activer ce bouton.
-              </p>
-            )}
-          </div>
+          {/* OAuth GitHub : affiché uniquement lorsqu'il est réellement configuré. */}
+          {oauth && (
+            <div className="card space-y-3">
+              <h2 className="text-sm font-medium text-slate-300">Recommandé</h2>
+              <a href="/api/auth/oauth/start" className="btn w-full">
+                <Github className="h-4 w-4" />
+                Se connecter avec GitHub
+              </a>
+            </div>
+          )}
 
-          {/* Méthode alternative : jeton personnel */}
+          {/* Connexion par jeton personnel (méthode primaire si l'OAuth n'est pas configuré). */}
           <div className="card space-y-3">
-            <h2 className="text-sm font-medium text-slate-300">Par jeton personnel</h2>
+            <h2 className="text-sm font-medium text-slate-300">
+              {oauth ? "Par jeton personnel" : "Connexion par jeton GitHub"}
+            </h2>
             <div>
               <label className="label">Jeton GitHub (portées repo et workflow)</label>
               <input
