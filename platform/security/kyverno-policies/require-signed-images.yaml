@@ -5,7 +5,10 @@ kind: ClusterPolicy
 metadata:
   name: verify-image-signatures
 spec:
-  validationFailureAction: Enforce
+  # Audit tant que la signature des IMAGES de conteneur n'est pas en place dans le pipeline
+  # (actuellement seul le SBOM est signé). Repasser en Enforce une fois `cosign sign <image>`
+  # intégré à la chaîne de build/mirroring — sinon tous les pods seraient bloqués.
+  validationFailureAction: Audit
   background: false
   rules:
     - name: verify-signature

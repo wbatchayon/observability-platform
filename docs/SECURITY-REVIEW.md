@@ -53,6 +53,16 @@ et propagé aux VMs via `configure-agent.yaml`.
 `gitleaks`, `trivy` (config + secrets), `checkov`, `tfsec`, `kubescape`, `conftest`/OPA, SBOM
 (syft) + signature `cosign`. À exécuter sur chaque PR.
 
+## Revue de sécurité complète (2026-06-21, post-consolidation infra + GUI)
+
+| Sévérité | Constat | Traitement |
+|---|---|---|
+| 🟢 Corrigé | Kyverno `verify-image-signatures` en Enforce alors que les **images** ne sont pas signées (seul le SBOM l'est) → pods bloqués en cluster réel | Passé en **Audit** ; repasser en Enforce après `cosign sign <image>` |
+| 🟢 Corrigé | Namespace `incident` (OneUptime/GLPI/MariaDB) sans deny-by-default | Ajout `network-policies/incident.yaml` (deny-all + DNS + intra + ingress monitoring/flux + egress 443) |
+| 🟡 Opérateur | Destinataire age de `.sops.yaml` = placeholder → chiffrement non fonctionnel | Renseigner la vraie clé publique age |
+| 🟢 OK | Secrets, conteneurs non-root, mTLS, variables `sensitive`, en-têtes GUI, pas de sink XSS, contrôle d'accès GUI | — |
+
 ## Verdict
-Prêt pour intégration. Tous les constats sont traités (mTLS, secrets, deny-by-default, signature
-des dépôts, auto-unseal, rotation de token, air-gap complet via Harbor).
+Prêt pour intégration. Tous les constats sont traités (mTLS, secrets, deny-by-default y compris
+`incident`, signature des dépôts, auto-unseal, rotation de token, air-gap via Harbor, Kyverno en
+Audit le temps de la signature d'images). Reste l'action opérateur : clé age SOPS réelle.
