@@ -17,6 +17,7 @@ GitHub.
 | **Credentials** | Secrets posés en **GitHub Actions Secrets** (sealed box) — jamais en clair |
 | **Pipelines** | Déclenche `validate` / `bootstrap` / `deploy` via **workflow_dispatch** |
 | **Suivi** | Statut/conclusion/liens des exécutions (rafraîchissement auto) |
+| **Outils** | Accès direct aux interfaces déployées (Grafana, Prometheus, Alertmanager, OneUptime, GLPI, Harbor, Vault, MinIO) |
 
 ## Variables d'environnement (serveur)
 
@@ -24,6 +25,8 @@ GitHub.
 |---|---|
 | `SESSION_SECRET` | clé de chiffrement de session (≥ 32 caractères) |
 | `GITHUB_REPOSITORY` | dépôt cible au format `owner/repo` |
+| `DEPLOY_REF` | (optionnel) ref Git ciblée par les dispatch (défaut `main`) |
+| `TOOL_GRAFANA_URL`, `TOOL_PROMETHEUS_URL`, `TOOL_ALERTMANAGER_URL`, `TOOL_ONEUPTIME_URL`, `TOOL_GLPI_URL`, `TOOL_HARBOR_URL`, `TOOL_VAULT_URL`, `TOOL_MINIO_URL` | URLs des outils déployés (page **Outils**) |
 
 ## Développement
 

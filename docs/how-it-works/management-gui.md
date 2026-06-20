@@ -25,6 +25,8 @@ deploy.yaml ─ validate (runner hébergé) | bootstrap/deploy (runner self-host
    cluster à partir de ces secrets → ils sont substitués par Flux dans la plateforme (bout en bout).
 4. **Pipelines** : bouton `validate` / `bootstrap` / `deploy` → déclenche `deploy.yaml`.
 5. **Suivi** : tableau des exécutions (statut, conclusion, lien logs), rafraîchissement auto.
+6. **Outils** : après déploiement, accès direct aux interfaces des composants (Grafana,
+   Prometheus, Alertmanager, OneUptime, GLPI, Harbor, Vault, MinIO) via les variables `TOOL_*`.
 
 ## Sécurité
 

@@ -18,6 +18,22 @@ stringData:
   SESSION_SECRET: ${GUI_SESSION_SECRET}
   GITHUB_REPOSITORY: ${GUI_GITHUB_REPOSITORY}
 ---
+# URLs des outils (non sensibles) — page "Outils". Dérivées des domaines d'environnement.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gui-tools
+  namespace: gui
+data:
+  TOOL_GRAFANA_URL: "https://${GRAFANA_DOMAIN}"
+  TOOL_PROMETHEUS_URL: "${TOOL_PROMETHEUS_URL}"
+  TOOL_ALERTMANAGER_URL: "${TOOL_ALERTMANAGER_URL}"
+  TOOL_ONEUPTIME_URL: "${TOOL_ONEUPTIME_URL}"
+  TOOL_GLPI_URL: "${TOOL_GLPI_URL}"
+  TOOL_HARBOR_URL: "https://${HARBOR_REGISTRY}"
+  TOOL_VAULT_URL: "${TOOL_VAULT_URL}"
+  TOOL_MINIO_URL: "${TOOL_MINIO_URL}"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -56,6 +72,8 @@ spec:
           envFrom:
             - secretRef:
                 name: gui-config
+            - configMapRef:
+                name: gui-tools
           livenessProbe:
             httpGet:
               path: /api/auth
