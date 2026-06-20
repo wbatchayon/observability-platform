@@ -43,9 +43,35 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v5
+      # Matérialise le Secret `env-secrets` (consommé par la substitution Flux) à partir des
+      # secrets de l'Environment GitHub posés par la console GUI -> les credentials saisis dans
+      # l'UI atteignent réellement le déploiement.
+      - name: Matérialiser env-secrets dans le cluster
+        if: ${{ inputs.action == 'deploy' }}
+        env:
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_OAUTH_CLIENT_SECRET: ${{ secrets.GRAFANA_OAUTH_CLIENT_SECRET }}
+          GLPI_DB_ROOT_PASSWORD: ${{ secrets.GLPI_DB_ROOT_PASSWORD }}
+          GLPI_DB_PASSWORD: ${{ secrets.GLPI_DB_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+        run: |
+          kubectl -n flux-system create secret generic env-secrets \
+            --from-literal=MINIO_ACCESS_KEY="$MINIO_ACCESS_KEY" \
+            --from-literal=MINIO_SECRET_KEY="$MINIO_SECRET_KEY" \
+            --from-literal=GRAFANA_ADMIN_PASSWORD="$GRAFANA_ADMIN_PASSWORD" \
+            --from-literal=GRAFANA_OAUTH_CLIENT_SECRET="$GRAFANA_OAUTH_CLIENT_SECRET" \
+            --from-literal=GLPI_DB_ROOT_PASSWORD="$GLPI_DB_ROOT_PASSWORD" \
+            --from-literal=GLPI_DB_PASSWORD="$GLPI_DB_PASSWORD" \
+            --from-literal=SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL" \
+            --from-literal=TEAMS_WEBHOOK_URL="$TEAMS_WEBHOOK_URL" \
+            --from-literal=SMTP_PASSWORD="$SMTP_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
       - name: Exécuter l'action
-        # Les credentials (TF_VAR_*, clé SOPS) sont fournis au runner via les secrets de
-        # l'Environment GitHub correspondant (posés par la console GUI) ou via Vault interne.
+        # Clé SOPS fournie au runner pour les secrets gérés hors GUI (le cas échéant).
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
         run: make ${{ inputs.action }} ENV=${{ inputs.environment }}

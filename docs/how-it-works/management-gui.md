@@ -9,7 +9,7 @@ Interface web pour **configurer, valider, lancer et suivre** les pipelines de la
 Navigateur ─▶ Console Next.js (namespace gui, TLS vault-issuer)
    ├─ /api/auth         session (cookie httpOnly chiffré, token GitHub de l'utilisateur)
    ├─ /api/environments ─▶ API GitHub Contents ─▶ PR sur environments/<env>/env-values.yaml
-   ├─ /api/secrets      ─▶ API GitHub Secrets (sealed box) — credentials chiffrés
+   ├─ /api/secrets      ─▶ GitHub Environment Secrets (sealed box, scoped par env) — credentials chiffrés
    ├─ /api/pipelines    ─▶ API GitHub workflow_dispatch ─▶ .github/workflows/deploy.yaml
    └─ /api/runs         ─▶ API GitHub Actions (suivi statut/logs)
 deploy.yaml ─ validate (runner hébergé) | bootstrap/deploy (runner self-hosted, cluster air-gap)
@@ -20,7 +20,9 @@ deploy.yaml ─ validate (runner hébergé) | bootstrap/deploy (runner self-host
 1. **Compte** : coller un token GitHub (scope `repo`, `workflow`) → session chiffrée.
 2. **Configuration** : saisir les valeurs d'un environnement → validées (zod) → **PR** créée
    automatiquement (aucune édition manuelle de fichier).
-3. **Credentials** : saisir les secrets → posés en **GitHub Secrets** (chiffrés, jamais en clair).
+3. **Credentials** : saisir les secrets → posés en **GitHub Environment Secrets** (chiffrés, scopés
+   par environnement). Au `deploy`, `deploy.yaml` matérialise le Secret `env-secrets` dans le
+   cluster à partir de ces secrets → ils sont substitués par Flux dans la plateforme (bout en bout).
 4. **Pipelines** : bouton `validate` / `bootstrap` / `deploy` → déclenche `deploy.yaml`.
 5. **Suivi** : tableau des exécutions (statut, conclusion, lien logs), rafraîchissement auto.
 

@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { client } from "@/lib/github";
+import { isConfigError, configError, serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
 // Statut de session.
 export async function GET() {
-  const session = await getSession();
-  return NextResponse.json({ authenticated: !!session.token, login: session.login || null });
+  try {
+    const session = await getSession();
+    return NextResponse.json({ authenticated: !!session.token, login: session.login || null });
+  } catch (e) {
+    if (isConfigError(e)) return configError(e);
+    return serverError("auth.get", e);
+  }
 }
 
 // Connexion : l'utilisateur fournit son token GitHub ; on le valide et on ouvre la session.

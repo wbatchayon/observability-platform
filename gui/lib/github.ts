@@ -11,34 +11,49 @@ export function targetRepo(): { owner: string; repo: string } {
   return { owner, repo };
 }
 
+// Référence Git ciblée par les dispatch (configurable ; défaut = branche par défaut).
+export function deployRef(): string {
+  return process.env.DEPLOY_REF || "main";
+}
+
 export function client(token: string): Octokit {
   return new Octokit({ auth: token });
 }
 
-// Pose un secret GitHub Actions chiffré (sealed box libsodium) — jamais en clair.
-export async function setActionsSecret(
+function seal(value: string, publicKeyB64: string): string {
+  const messageBytes = Buffer.from(value, "utf-8");
+  const keyBytes = Buffer.from(publicKeyB64, "base64");
+  const encryptedBytes = sodium.seal(messageBytes, keyBytes);
+  return Buffer.from(encryptedBytes).toString("base64");
+}
+
+// Pose un secret scopé à un GitHub Environment (isolé par env, jamais en clair).
+export async function setEnvironmentSecret(
   octo: Octokit,
   owner: string,
   repo: string,
+  environment: string,
   name: string,
   value: string,
 ): Promise<void> {
-  const { data: key } = await octo.actions.getRepoPublicKey({ owner, repo });
-  // Sealed box (curve25519) — chiffrement à destination de la clé publique du dépôt.
-  const messageBytes = Buffer.from(value, "utf-8");
-  const keyBytes = Buffer.from(key.key, "base64");
-  const encryptedBytes = sodium.seal(messageBytes, keyBytes);
-  const encrypted_value = Buffer.from(encryptedBytes).toString("base64");
-  await octo.actions.createOrUpdateRepoSecret({
+  // S'assure que l'Environment existe.
+  await octo.repos.createOrUpdateEnvironment({ owner, repo, environment_name: environment });
+  const { data: key } = await octo.actions.getEnvironmentPublicKey({
     owner,
     repo,
+    environment_name: environment,
+  });
+  await octo.actions.createOrUpdateEnvironmentSecret({
+    owner,
+    repo,
+    environment_name: environment,
     secret_name: name,
-    encrypted_value,
+    encrypted_value: seal(value, key.key),
     key_id: key.key_id,
   });
 }
 
-// Écrit/maj un fichier de configuration d'environnement sur une branche dédiée + ouvre une PR.
+// Écrit/maj la config d'un environnement sur une branche STABLE par env + réutilise la PR ouverte.
 export async function writeEnvConfigPR(
   octo: Octokit,
   owner: string,
@@ -47,13 +62,18 @@ export async function writeEnvConfigPR(
   yamlContent: string,
 ): Promise<{ prUrl: string; branch: string }> {
   const base = "main";
-  const branch = `gui/env-${environment}-${Date.now()}`;
+  const branch = `gui/config-${environment}`;
   const path = `environments/${environment}/env-values.yaml`;
 
-  const { data: ref } = await octo.git.getRef({ owner, repo, ref: `heads/${base}` });
-  await octo.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: ref.object.sha });
+  // Crée la branche si absente (sinon réutilise l'existante).
+  try {
+    await octo.git.getRef({ owner, repo, ref: `heads/${branch}` });
+  } catch {
+    const { data: baseRef } = await octo.git.getRef({ owner, repo, ref: `heads/${base}` });
+    await octo.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: baseRef.object.sha });
+  }
 
-  // SHA existant du fichier (s'il existe) pour la mise à jour.
+  // SHA existant du fichier (pour mise à jour).
   let sha: string | undefined;
   try {
     const { data } = await octo.repos.getContent({ owner, repo, path, ref: branch });
@@ -72,6 +92,16 @@ export async function writeEnvConfigPR(
     sha,
   });
 
+  // Réutilise la PR ouverte pour cette branche, sinon en crée une.
+  const { data: existing } = await octo.pulls.list({
+    owner,
+    repo,
+    state: "open",
+    head: `${owner}:${branch}`,
+  });
+  if (existing.length > 0) {
+    return { prUrl: existing[0].html_url, branch };
+  }
   const { data: pr } = await octo.pulls.create({
     owner,
     repo,
@@ -80,11 +110,10 @@ export async function writeEnvConfigPR(
     title: `chore(gui): configuration de l'environnement ${environment}`,
     body: "Configuration générée via la console de management (sans modification manuelle du code).",
   });
-
   return { prUrl: pr.html_url, branch };
 }
 
-// Déclenche un workflow via workflow_dispatch.
+// Déclenche un workflow via workflow_dispatch ; message clair si le workflow est absent de la ref.
 export async function dispatchWorkflow(
   octo: Octokit,
   owner: string,
@@ -93,22 +122,23 @@ export async function dispatchWorkflow(
   ref: string,
   inputs: Record<string, string>,
 ): Promise<void> {
-  await octo.actions.createWorkflowDispatch({
-    owner,
-    repo,
-    workflow_id: workflowFile,
-    ref,
-    inputs,
-  });
+  try {
+    await octo.actions.createWorkflowDispatch({ owner, repo, workflow_id: workflowFile, ref, inputs });
+  } catch (e) {
+    const status = (e as { status?: number }).status;
+    if (status === 404) {
+      throw new Error(
+        `Workflow "${workflowFile}" introuvable sur la ref "${ref}". ` +
+          "Vérifiez qu'il est présent sur la branche par défaut (PR mergée) ou ajustez DEPLOY_REF.",
+      );
+    }
+    throw e;
+  }
 }
 
 // Liste les exécutions récentes (suivi).
 export async function listRuns(octo: Octokit, owner: string, repo: string) {
-  const { data } = await octo.actions.listWorkflowRunsForRepo({
-    owner,
-    repo,
-    per_page: 20,
-  });
+  const { data } = await octo.actions.listWorkflowRunsForRepo({ owner, repo, per_page: 20 });
   return data.workflow_runs.map((r) => ({
     id: r.id,
     name: r.name || r.display_title,

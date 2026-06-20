@@ -24,6 +24,11 @@ const secretDefaults = {
   MINIO_SECRET_KEY: "",
   GRAFANA_ADMIN_PASSWORD: "",
   GLPI_DB_PASSWORD: "",
+  GLPI_DB_ROOT_PASSWORD: "",
+  GRAFANA_OAUTH_CLIENT_SECRET: "",
+  SLACK_WEBHOOK_URL: "",
+  TEAMS_WEBHOOK_URL: "",
+  SMTP_PASSWORD: "",
 };
 
 export default function EnvironmentsPage() {

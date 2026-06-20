@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireToken } from "@/lib/session";
 import { client, targetRepo, writeEnvConfigPR } from "@/lib/github";
 import { envValuesSchema, toEnvValuesYaml } from "@/lib/validation";
+import { serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,6 @@ export async function POST(req: NextRequest) {
     const { prUrl, branch } = await writeEnvConfigPR(octo, owner, repo, parsed.data.environment, yaml);
     return NextResponse.json({ ok: true, prUrl, branch });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    return serverError("environments", e);
   }
 }

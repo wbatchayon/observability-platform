@@ -19,13 +19,20 @@ export const envValuesSchema = z.object({
 
 export type EnvValues = z.infer<typeof envValuesSchema>;
 
-// Secrets d'un environnement (posés en secrets GitHub Actions, jamais en clair).
+// Secrets d'un environnement (posés en secrets scopés par GitHub Environment, jamais en clair).
+// Couvre l'ensemble des clés du Secret `env-secrets` consommé par Flux (les facultatives peuvent
+// rester vides selon les composants activés).
 export const secretsSchema = z.object({
   environment: z.enum(["dev", "staging", "prod"]),
   MINIO_ACCESS_KEY: z.string().min(3),
   MINIO_SECRET_KEY: z.string().min(8),
   GRAFANA_ADMIN_PASSWORD: z.string().min(8),
   GLPI_DB_PASSWORD: z.string().min(8),
+  GLPI_DB_ROOT_PASSWORD: z.string().min(8),
+  GRAFANA_OAUTH_CLIENT_SECRET: z.string().optional().default(""),
+  SLACK_WEBHOOK_URL: z.string().optional().default(""),
+  TEAMS_WEBHOOK_URL: z.string().optional().default(""),
+  SMTP_PASSWORD: z.string().optional().default(""),
 });
 
 export const dispatchSchema = z.object({

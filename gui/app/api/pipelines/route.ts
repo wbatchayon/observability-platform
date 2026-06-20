@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireToken } from "@/lib/session";
-import { client, targetRepo, dispatchWorkflow } from "@/lib/github";
+import { client, targetRepo, dispatchWorkflow, deployRef } from "@/lib/github";
 import { dispatchSchema } from "@/lib/validation";
+import { serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
@@ -26,12 +27,17 @@ export async function POST(req: NextRequest) {
   try {
     const { owner, repo } = targetRepo();
     const octo = client(auth.token);
-    await dispatchWorkflow(octo, owner, repo, "deploy.yaml", "main", {
+    await dispatchWorkflow(octo, owner, repo, "deploy.yaml", deployRef(), {
       environment: parsed.data.environment,
       action: parsed.data.pipeline,
     });
     return NextResponse.json({ ok: true, dispatched: parsed.data });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    // Le message d'absence de workflow est explicite et sûr à exposer.
+    const msg = (e as Error).message || "";
+    if (msg.includes("introuvable")) {
+      return NextResponse.json({ error: msg }, { status: 409 });
+    }
+    return serverError("pipelines", e);
   }
 }
