@@ -17,9 +17,16 @@ export default function RunsPage() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authRequired, setAuthRequired] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/runs");
+    if (r.status === 401) {
+      setAuthRequired(true);
+      setErr(null);
+      setLoading(false);
+      return;
+    }
     const d = await r.json();
     if (r.ok) {
       setRuns(d.runs);
@@ -32,9 +39,10 @@ export default function RunsPage() {
 
   useEffect(() => {
     load();
+    if (authRequired) return; // pas de polling tant que non authentifié
     const t = setInterval(load, 10000); // rafraîchissement auto (suivi)
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, authRequired]);
 
   return (
     <div className="space-y-6">
@@ -45,6 +53,14 @@ export default function RunsPage() {
         </button>
       </div>
 
+      {authRequired && (
+        <div className="card border-warn/30">
+          <p className="text-sm">
+            Connectez-vous depuis l&apos;onglet <span className="font-medium">Compte</span> pour
+            suivre les exécutions.
+          </p>
+        </div>
+      )}
       {err && <p className="text-sm text-bad">❌ {err}</p>}
       {loading && <p className="text-sm text-slate-400">Chargement…</p>}
 

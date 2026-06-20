@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireToken } from "@/lib/session";
 
 export const runtime = "nodejs";
 // Lecture des variables TOOL_* à l'exécution (pas de prérendu statique au build).
@@ -20,6 +21,12 @@ function url(name: string): string | null {
 }
 
 export async function GET() {
+  try {
+    await requireToken();
+  } catch {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
   const tools: Tool[] = [
     {
       key: "grafana",

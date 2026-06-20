@@ -40,10 +40,17 @@ const icons: Record<string, LucideIcon> = {
 export default function ToolsPage() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authRequired, setAuthRequired] = useState(false);
 
   useEffect(() => {
     fetch("/api/tools")
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (r.status === 401) {
+          setAuthRequired(true);
+          return { tools: [] };
+        }
+        return r.json();
+      })
       .then((d) => setTools(d.tools || []))
       .finally(() => setLoading(false));
   }, []);
@@ -58,6 +65,14 @@ export default function ToolsPage() {
       </div>
 
       {loading && <p className="text-sm text-slate-400">Chargement…</p>}
+      {authRequired && (
+        <div className="card border-warn/30">
+          <p className="text-sm">
+            Connectez-vous depuis l&apos;onglet <span className="font-medium">Compte</span> pour
+            accéder aux outils.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tools.map((t) => {
