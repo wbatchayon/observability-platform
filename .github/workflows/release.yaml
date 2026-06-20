@@ -1,4 +1,6 @@
 ---
+# Gestion des releases : versioning sémantique + changelog (Release Please) sur conventional
+# commits, puis publication d'artefacts de release signés (bundle + SBOM + cosign).
 name: Release
 
 "on":
@@ -8,14 +10,67 @@ name: Release
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  # 1. Crée/maintient la "release PR" (version + CHANGELOG) ; au merge, crée le tag + la release.
   release-please:
-    name: Versioning sémantique + changelog
+    name: Versioning + changelog
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
     steps:
-      - name: Release Please (conventional commits -> SemVer + CHANGELOG)
+      - id: rp
         uses: googleapis/release-please-action@v4
         with:
-          release-type: simple
-          package-name: observability-platform
+          config-file: .github/release-please-config.json
+          manifest-file: .github/.release-please-manifest.json
+
+  # 2. À chaque release créée : bundle reproductible + SBOM + signatures, attachés à la release.
+  artifacts:
+    name: Artefacts de release (bundle + SBOM + cosign)
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Bundle reproductible du dépôt
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          git archive --format=tar.gz --prefix="observability-platform-${TAG}/" \
+            -o "observability-platform-${TAG}.tar.gz" HEAD
+      - name: Génération SBOM (syft)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: observability-platform.sbom.spdx.json
+      - name: Cosign
+        uses: sigstore/cosign-installer@v4.1.2
+      - name: Signature des artefacts (keyless OIDC)
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          cosign sign-blob --yes "observability-platform-${TAG}.tar.gz" \
+            --output-signature "observability-platform-${TAG}.tar.gz.sig" \
+            --output-certificate "observability-platform-${TAG}.tar.gz.pem"
+          cosign sign-blob --yes observability-platform.sbom.spdx.json \
+            --output-signature observability-platform.sbom.spdx.json.sig
+      - name: Publication des artefacts sur la GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          gh release upload "${TAG}" \
+            "observability-platform-${TAG}.tar.gz" \
+            "observability-platform-${TAG}.tar.gz.sig" \
+            "observability-platform-${TAG}.tar.gz.pem" \
+            observability-platform.sbom.spdx.json \
+            observability-platform.sbom.spdx.json.sig \
+            --clobber
