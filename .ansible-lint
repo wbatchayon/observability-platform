@@ -1,0 +1,11 @@
+---
+profile: production
+# Modules Windows simulés pour le lint : la collection ansible.windows/community.windows
+# n'a pas besoin d'être installée dans l'environnement de lint (elle l'est sur le contrôleur
+# réel — cf. ansible/requirements.yml). Évite les faux échecs syntax-check.
+mock_modules:
+  - ansible.windows.win_file
+  - ansible.windows.win_get_url
+  - ansible.windows.win_service
+  - ansible.windows.win_template
+  - community.windows.win_unzip
