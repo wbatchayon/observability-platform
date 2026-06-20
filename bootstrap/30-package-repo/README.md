@@ -26,7 +26,7 @@ Liste alignée sur `VM_Configuration/Docs/Markdown/specification_packages_otel.m
 ## Variables (via `environments/<env>/30-package-repo.tfvars`)
 
 `kubeconfig_path`, `harbor_url`, `harbor_admin_password` (SOPS), `storage_size`, `otel_version`,
-`retention_days`.
+`robot_token_rotation_days`.
 
 ## Outputs (consommés par Ansible / B13)
 

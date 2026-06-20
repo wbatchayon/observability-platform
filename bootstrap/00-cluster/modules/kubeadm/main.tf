@@ -3,7 +3,6 @@
 
 locals {
   first_cp     = var.control_plane_nodes[0]
-  join_token   = "" # généré dynamiquement sur le control-plane (voir remote-exec)
   cni_manifest = var.cni == "calico" ? "calico.yaml" : "cilium.yaml"
   all_nodes    = concat(var.control_plane_nodes, var.worker_nodes)
   # Registres publics redirigés vers le miroir Harbor interne (air-gap).

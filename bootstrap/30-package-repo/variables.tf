@@ -32,12 +32,6 @@ variable "otel_version" {
   default     = "0.148.0"
 }
 
-variable "retention_days" {
-  description = "Rétention des artefacts non-release (jours)."
-  type        = number
-  default     = 90
-}
-
 variable "robot_token_rotation_days" {
   description = "Durée de vie + intervalle de rotation du token du compte robot read-only (jours)."
   type        = number

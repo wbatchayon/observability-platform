@@ -14,12 +14,6 @@ variable "git_branch" {
   default     = "main"
 }
 
-variable "git_path" {
-  description = "Chemin racine des manifests dans le dépôt."
-  type        = string
-  default     = "platform"
-}
-
 variable "environment" {
   description = "Environnement cible (dev/staging/prod) — sélectionne l'overlay environments/<env>."
   type        = string
