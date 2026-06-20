@@ -1,0 +1,57 @@
+---
+# Secret S3 (réplique de storage/minio-credentials dans le namespace backends via substitution).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: minio-credentials
+  namespace: backends
+type: Opaque
+stringData:
+  accesskey: ${MINIO_ACCESS_KEY}
+  secretkey: ${MINIO_SECRET_KEY}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: loki
+  namespace: backends
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: loki
+      version: "6.6.2"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+  values:
+    deploymentMode: Distributed
+    loki:
+      auth_enabled: true          # multi-tenant
+      storage:
+        type: s3
+        bucketNames:
+          chunks: loki
+          ruler: loki
+          admin: loki
+        s3:
+          endpoint: minio.storage.svc.cluster.local:9000
+          accessKeyId: ${MINIO_ACCESS_KEY}
+          secretAccessKey: ${MINIO_SECRET_KEY}
+          s3ForcePathStyle: true
+          insecure: false
+      limits_config:
+        retention_period: ${LOKI_RETENTION}
+      compactor:
+        retention_enabled: true
+    # Composants distribués (microservices).
+    ingester:
+      replicas: ${LOKI_INGESTER_REPLICAS}
+    distributor:
+      replicas: 2
+    querier:
+      replicas: 2
+    queryFrontend:
+      replicas: 2
+    gateway:
+      enabled: true

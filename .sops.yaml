@@ -1,0 +1,14 @@
+# Règles de chiffrement SOPS - secrets jamais en clair dans Git.
+# Le destinataire age est propre à chaque organisation : remplacez la clé publique
+# ci-dessous (générée via `age-keygen`) et fournissez la clé privée via la variable
+# d'environnement SOPS_AGE_KEY (ou SOPS_AGE_KEY_FILE) au moment du chiffrement/déchiffrement.
+creation_rules:
+  # Secrets par environnement (values Helm sensibles + tfvars sensibles)
+  - path_regex: environments/.*/(secrets.*|.*\.secret)\.(yaml|yml)$
+    encrypted_regex: "^(data|stringData|.*password.*|.*token.*|.*key.*|.*secret.*)$"
+    age: >-
+      age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqremplacez_moi
+  # Inventaires Ansible chiffrés
+  - path_regex: ansible/inventories/.*/(vault|secrets).*\.(yaml|yml)$
+    age: >-
+      age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqremplacez_moi

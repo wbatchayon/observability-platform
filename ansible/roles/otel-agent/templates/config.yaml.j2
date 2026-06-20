@@ -1,0 +1,82 @@
+# Configuration de l'agent OpenTelemetry Collector (générée par Ansible).
+# Exporte en OTLP/gRPC mTLS vers l'Edge Collector du DC.
+extensions:
+  file_storage:
+    directory: {{ '/var/lib/otelcol/queue' if ansible_facts['system'] == 'Linux' else 'C:\\ProgramData\\otelcol-contrib\\queue' }}
+
+receivers:
+  hostmetrics:
+    collection_interval: 30s
+    scrapers:
+      cpu: {}
+      memory: {}
+      disk: {}
+      filesystem: {}
+      network: {}
+      load: {}
+  filelog:
+    include:
+{% if ansible_facts['system'] == 'Linux' %}
+      - /var/log/*.log
+      - /var/log/syslog
+{% else %}
+      - 'C:\\inetpub\\logs\\**\\*.log'
+{% endif %}
+    start_at: end
+{% if ansible_facts['system'] == 'Linux' %}
+  journald:
+    directory: /var/log/journal
+{% else %}
+  windowseventlog:
+    channel: application
+{% endif %}
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 75
+    spike_limit_percentage: 20
+  resourcedetection:
+    detectors: [env, system]
+  resource:
+    attributes:
+      - key: host.name
+        value: "{{ inventory_hostname }}"
+        action: upsert
+      - key: environment
+        value: "{{ environment_name }}"
+        action: upsert
+  batch:
+    send_batch_size: 8192
+    timeout: 5s
+
+exporters:
+  otlp:
+    endpoint: "{{ edge_collector_endpoint }}"
+    compression: gzip
+    tls:
+      insecure: false
+      ca_file: {{ otel_tls_dir_linux ~ '/ca.crt' if ansible_facts['system'] == 'Linux' else otel_tls_dir_windows ~ '\\ca.crt' }}
+      cert_file: {{ otel_tls_dir_linux ~ '/tls.crt' if ansible_facts['system'] == 'Linux' else otel_tls_dir_windows ~ '\\tls.crt' }}
+      key_file: {{ otel_tls_dir_linux ~ '/tls.key' if ansible_facts['system'] == 'Linux' else otel_tls_dir_windows ~ '\\tls.key' }}
+    sending_queue:
+      enabled: true
+      storage: file_storage
+    retry_on_failure:
+      enabled: true
+
+service:
+  extensions: [file_storage]
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [otlp]
+    logs:
+{% if ansible_facts['system'] == 'Linux' %}
+      receivers: [filelog, journald]
+{% else %}
+      receivers: [filelog, windowseventlog]
+{% endif %}
+      processors: [memory_limiter, resourcedetection, resource, batch]
+      exporters: [otlp]

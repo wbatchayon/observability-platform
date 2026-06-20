@@ -1,0 +1,22 @@
+---
+# Certificat TLS de MinIO émis par la PKI Vault via le ClusterIssuer vault-issuer.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: minio-tls
+  namespace: storage
+spec:
+  secretName: minio-tls
+  duration: 2160h
+  renewBefore: 360h
+  issuerRef:
+    name: vault-issuer
+    kind: ClusterIssuer
+  commonName: minio.storage.svc.cluster.local
+  dnsNames:
+    - minio.storage.svc.cluster.local
+    - minio.storage.svc
+  usages:
+    - server auth
+    - digital signature
+    - key encipherment

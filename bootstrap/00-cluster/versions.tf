@@ -1,0 +1,27 @@
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2"
+    }
+    local = {
+      source  = "hashicorp/local"
+      version = "~> 2.5"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
+  }
+
+  # Backend distant recommandé (décommenter et adapter par environnement) :
+  # backend "s3" {
+  #   bucket = "tfstate-observability"
+  #   key    = "00-cluster/terraform.tfstate"
+  #   region = "eu-west-1"
+  #   # endpoint MinIO interne pour contexte air-gap :
+  #   # endpoints = { s3 = "https://minio.internal:9000" }
+  # }
+}

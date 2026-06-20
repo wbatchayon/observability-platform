@@ -1,0 +1,34 @@
+---
+# Canaux de notification par sévérité/équipe. Tokens injectés depuis le secret env (SOPS).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: notification-tokens
+  namespace: incident
+type: Opaque
+stringData:
+  slack-webhook-url: ${SLACK_WEBHOOK_URL}
+  teams-webhook-url: ${TEAMS_WEBHOOK_URL}
+  smtp-password: ${SMTP_PASSWORD}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-routing
+  namespace: incident
+data:
+  routing.yaml: |
+    # Mapping sévérité -> canaux (consommé par OneUptime).
+    severities:
+      critical:
+        channels: [slack, teams, email, sms]
+        escalation: immediate
+      warning:
+        channels: [slack, email]
+        escalation: 15m
+      info:
+        channels: [slack]
+        escalation: none
+    teams:
+      observability: { slack: "#obs-alerts", email: "obs@example.com" }
+      sre: { slack: "#sre-oncall", email: "sre@example.com" }

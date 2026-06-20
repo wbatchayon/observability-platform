@@ -1,0 +1,72 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata:
+  name: grafana
+  namespace: visualization
+spec:
+  interval: 1h
+  type: oci
+  url: oci://${HARBOR_REGISTRY}/charts
+---
+# Identifiants admin injectés depuis le secret env (SOPS).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-admin
+  namespace: visualization
+type: Opaque
+stringData:
+  admin-user: ${GRAFANA_ADMIN_USER}
+  admin-password: ${GRAFANA_ADMIN_PASSWORD}
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: grafana
+  namespace: visualization
+spec:
+  interval: 30m
+  chart:
+    spec:
+      chart: grafana
+      version: "7.3.11"
+      sourceRef:
+        kind: HelmRepository
+        name: grafana
+  values:
+    replicas: 2
+    admin:
+      existingSecret: grafana-admin
+      userKey: admin-user
+      passwordKey: admin-password
+    # Session stickiness pour la HA.
+    podLabels:
+      app.kubernetes.io/part-of: observability
+    # Découverte des datasources/dashboards as-code via sidecars (label-based).
+    sidecar:
+      datasources:
+        enabled: true
+        label: grafana_datasource
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+    grafana.ini:
+      server:
+        protocol: https
+        cert_file: /etc/grafana/tls/tls.crt
+        cert_key: /etc/grafana/tls/tls.key
+        root_url: https://${GRAFANA_DOMAIN}
+      auth.generic_oauth:
+        enabled: ${GRAFANA_OAUTH_ENABLED}
+        name: SSO
+        client_id: ${GRAFANA_OAUTH_CLIENT_ID}
+        client_secret: ${GRAFANA_OAUTH_CLIENT_SECRET}
+        auth_url: ${GRAFANA_OAUTH_AUTH_URL}
+        token_url: ${GRAFANA_OAUTH_TOKEN_URL}
+        api_url: ${GRAFANA_OAUTH_API_URL}
+    extraSecretMounts:
+      - name: grafana-tls
+        secretName: grafana-tls
+        mountPath: /etc/grafana/tls
+        readOnly: true

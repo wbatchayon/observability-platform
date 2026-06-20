@@ -1,0 +1,55 @@
+---
+# Datasources as-code, découvertes par le sidecar Grafana (label grafana_datasource).
+# Corrélation logs <-> traces <-> métriques configurée.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: visualization
+  labels:
+    grafana_datasource: "1"
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki-gateway.backends.svc.cluster.local
+        jsonData:
+          httpHeaderName1: X-Scope-OrgID
+          # Corrélation logs -> traces (derived field vers Tempo).
+          derivedFields:
+            - name: TraceID
+              matcherRegex: "trace_id=(\\w+)"
+              url: "$${__value.raw}"
+              datasourceUid: tempo
+        secureJsonData:
+          httpHeaderValue1: ${TENANT_ID}
+      - name: Mimir
+        type: prometheus
+        access: proxy
+        url: http://mimir-query-frontend.backends.svc.cluster.local/prometheus
+        jsonData:
+          httpHeaderName1: X-Scope-OrgID
+          exemplarTraceIdDestinations:
+            - name: trace_id
+              datasourceUid: tempo
+        secureJsonData:
+          httpHeaderValue1: ${TENANT_ID}
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        access: proxy
+        url: http://tempo-query-frontend.backends.svc.cluster.local:3100
+        jsonData:
+          # Corrélation traces -> logs (Tempo -> Loki).
+          tracesToLogsV2:
+            datasourceUid: loki
+          httpHeaderName1: X-Scope-OrgID
+        secureJsonData:
+          httpHeaderValue1: ${TENANT_ID}
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus-operated.monitoring.svc.cluster.local:9090

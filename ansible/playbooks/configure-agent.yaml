@@ -1,0 +1,24 @@
+---
+# Re-templating de la configuration + redémarrage, sans réinstallation du package.
+- name: Reconfigurer l'agent OpenTelemetry
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Régénérer la configuration (Linux)
+      ansible.builtin.template:
+        src: ../roles/otel-agent/templates/config.yaml.j2
+        dest: "{{ otel_config_path_linux }}"
+        owner: otelcol
+        group: otelcol
+        mode: "0640"
+      become: true
+      when: ansible_facts['system'] == "Linux"
+      notify: Redémarrer otelcol (Linux)
+  handlers:
+    - name: Redémarrer otelcol (Linux)
+      ansible.builtin.systemd:
+        name: otelcol-contrib
+        state: restarted
+      become: true
+  vars:
+    otel_config_path_linux: /etc/otelcol-contrib/config.yaml

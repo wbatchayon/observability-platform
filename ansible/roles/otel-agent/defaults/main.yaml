@@ -1,0 +1,7 @@
+---
+otel_config_path_linux: /etc/otelcol-contrib/config.yaml
+otel_config_path_windows: C:\ProgramData\otelcol-contrib\config\config.yaml
+otel_tls_dir_linux: /etc/otelcol-contrib/tls
+otel_tls_dir_windows: C:\ProgramData\otelcol-contrib\tls
+otel_service_name_linux: otelcol-contrib
+otel_service_name_windows: otelcol-contrib

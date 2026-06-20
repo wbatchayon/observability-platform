@@ -1,0 +1,28 @@
+---
+# Installation offline Windows : extraction tar.gz depuis le dépôt interne + service via sc.exe.
+- name: Créer les répertoires OTel (Windows)
+  ansible.windows.win_file:
+    path: "{{ item }}"
+    state: directory
+  loop:
+    - C:\Program Files\otelcol-contrib
+    - C:\ProgramData\otelcol-contrib\config
+    - "{{ otel_tls_dir_windows }}"
+
+- name: Télécharger l'archive depuis le dépôt interne (réseau interne uniquement)
+  ansible.windows.win_get_url:
+    url: "{{ package_repo_url }}/otel-packages/otelcol-contrib_{{ otel_version }}_windows_amd64.tar.gz"
+    dest: C:\Windows\Temp\otelcol.tar.gz
+
+- name: Extraire l'archive
+  community.windows.win_unzip:
+    src: C:\Windows\Temp\otelcol.tar.gz
+    dest: C:\Program Files\otelcol-contrib
+
+- name: Créer le service Windows via sc.exe
+  ansible.windows.win_service:
+    name: "{{ otel_service_name_windows }}"
+    path: '"C:\Program Files\otelcol-contrib\otelcol-contrib.exe" --config="{{ otel_config_path_windows }}"'
+    display_name: OpenTelemetry Collector Contrib
+    start_mode: auto
+    state: started

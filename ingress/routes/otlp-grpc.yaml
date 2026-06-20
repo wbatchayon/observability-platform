@@ -1,0 +1,29 @@
+---
+# Route OTLP/gRPC publique -> service d'ingestion du gateway OTel.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: otlp-grpc
+  namespace: ingress
+  annotations:
+    haproxy.org/server-proto: "h2"          # gRPC = HTTP/2
+    haproxy.org/timeout-server: "30s"
+    haproxy.org/backend-config-snippet: |
+      retries 3
+      option redispatch
+spec:
+  ingressClassName: haproxy
+  tls:
+    - hosts: ["${OTLP_DOMAIN}"]
+      secretName: otlp-ingress-tls
+  rules:
+    - host: ${OTLP_DOMAIN}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: otel-gateway
+                port:
+                  number: 4317

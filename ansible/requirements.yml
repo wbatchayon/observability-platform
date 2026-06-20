@@ -1,0 +1,11 @@
+---
+# Collections requises sur le contrôleur Ansible (à installer avant exécution) :
+#   ansible-galaxy collection install -r ansible/requirements.yml
+# En air-gap, ces collections sont importées hors-ligne (tarballs) depuis le dépôt interne.
+collections:
+  - name: ansible.windows
+    version: ">=2.0.0"
+  - name: community.windows
+    version: ">=2.0.0"
+  - name: ansible.posix
+    version: ">=1.5.0"

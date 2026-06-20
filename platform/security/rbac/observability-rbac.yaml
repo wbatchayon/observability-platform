@@ -1,0 +1,29 @@
+# RBAC minimal : rôle de lecture seule pour l'exploitation (SRE) sur les couches d'observabilité.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: observability-viewer
+rules:
+  - apiGroups: [""]
+    resources: [pods, services, endpoints, configmaps, events]
+    verbs: [get, list, watch]
+  - apiGroups: ["apps"]
+    resources: [deployments, statefulsets, replicasets]
+    verbs: [get, list, watch]
+  - apiGroups: ["helm.toolkit.fluxcd.io", "kustomize.toolkit.fluxcd.io"]
+    resources: ["*"]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: observability-viewer
+subjects:
+  - kind: Group
+    name: observability-sre
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: observability-viewer
+  apiGroup: rbac.authorization.k8s.io

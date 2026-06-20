@@ -1,0 +1,37 @@
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: resources-health
+  namespace: monitoring
+spec:
+  groups:
+    - name: resources.rules
+      rules:
+        - alert: HighMemoryUsage
+          expr: |
+            sum(container_memory_working_set_bytes{namespace=~"backends|ingestion|monitoring|visualization|storage"})
+              by (namespace, pod)
+            / sum(kube_pod_container_resource_limits{resource="memory"}) by (namespace, pod) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Consommation mémoire élevée"
+            description: "Un pod dépasse 90% de sa limite mémoire ({{ $labels.namespace }}/{{ $labels.pod }})."
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod en CrashLoop"
+            description: "{{ $labels.namespace }}/{{ $labels.pod }} redémarre en boucle."
+        - alert: PersistentVolumeFillingUp
+          expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes < 0.15
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Volume persistant presque plein"
+            description: "Moins de 15% d'espace libre sur un PV."

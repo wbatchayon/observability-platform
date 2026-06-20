@@ -1,0 +1,51 @@
+---
+# Dashboard "vue d'ensemble" as-code, découvert par le sidecar Grafana (label grafana_dashboard).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-overview
+  namespace: visualization
+  labels:
+    grafana_dashboard: "1"
+data:
+  overview.json: |
+    {
+      "uid": "obs-overview",
+      "title": "Observabilité — Vue d'ensemble",
+      "schemaVersion": 39,
+      "version": 1,
+      "editable": true,
+      "time": {"from": "now-6h", "to": "now"},
+      "panels": [
+        {
+          "id": 1,
+          "title": "Débit d'ingestion (spans/s)",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "sum(rate(otelcol_receiver_accepted_spans[5m]))", "legendFormat": "spans"}
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Logs ingérés (lignes/s)",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {"expr": "sum(rate(loki_distributor_lines_received_total[5m]))", "legendFormat": "lignes"}
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Taille des files d'export OTel",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "Prometheus"},
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+          "targets": [
+            {"expr": "sum(otelcol_exporter_queue_size) by (exporter)", "legendFormat": "{{exporter}}"}
+          ]
+        }
+      ]
+    }

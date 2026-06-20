@@ -1,0 +1,15 @@
+---
+- name: Redémarrer otelcol (Linux)
+  ansible.builtin.systemd:
+    name: "{{ otel_service_name_linux }}"
+    state: restarted
+    enabled: true
+    daemon_reload: true
+  become: true
+  when: ansible_facts['system'] == "Linux"
+
+- name: Redémarrer otelcol (Windows)
+  ansible.windows.win_service:
+    name: "{{ otel_service_name_windows }}"
+    state: restarted
+  when: ansible_facts['os_family'] == "Windows"
