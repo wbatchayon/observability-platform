@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+// Lecture des variables TOOL_* à l'exécution (pas de prérendu statique au build).
+export const dynamic = "force-dynamic";
 
 // Catalogue des outils de la plateforme et leurs URLs (configurées via variables TOOL_*).
 // Après déploiement, l'opérateur renseigne ces URLs (ou elles sont injectées par Flux/Helm).
