@@ -3,9 +3,21 @@
 import { useState } from "react";
 
 const pipelines = [
-  { id: "validate", label: "Validate", desc: "Lint + kubeconform + scans (sans déploiement)." },
-  { id: "bootstrap", label: "Bootstrap", desc: "Provisionne le socle : cluster → Harbor → Vault → Flux." },
-  { id: "deploy", label: "Deploy", desc: "Réconcilie la plateforme via FluxCD." },
+  {
+    id: "validate",
+    label: "Validation",
+    desc: "Lint, kubeconform et scans de sécurité. Aucun déploiement.",
+  },
+  {
+    id: "bootstrap",
+    label: "Provisionnement",
+    desc: "Provisionne le socle : cluster, Harbor, Vault puis Flux.",
+  },
+  {
+    id: "deploy",
+    label: "Déploiement",
+    desc: "Réconcilie la plateforme via FluxCD.",
+  },
 ];
 
 export default function PipelinesPage() {
@@ -25,7 +37,7 @@ export default function PipelinesPage() {
     setBusy(null);
     setMsg(
       r.ok
-        ? `✅ Pipeline "${pipeline}" déclenché pour ${environment}. Voir l'onglet Suivi.`
+        ? `✅ Pipeline « ${pipeline} » déclenché pour ${environment}. Consultez l'onglet Suivi.`
         : `❌ ${d.error || "Échec"}`,
     );
   }
@@ -44,7 +56,7 @@ export default function PipelinesPage() {
           </select>
         </div>
         <p className="text-xs text-slate-500 self-end pb-2">
-          Déclenche le workflow <code>deploy.yaml</code> via l&apos;API GitHub (workflow_dispatch).
+          Déclenche le workflow de déploiement via l&apos;API GitHub, sans modifier le code source.
         </p>
       </div>
 
@@ -56,7 +68,7 @@ export default function PipelinesPage() {
               <p className="text-sm text-slate-400 mt-1">{p.desc}</p>
             </div>
             <button onClick={() => run(p.id)} disabled={!!busy} className="btn mt-auto">
-              {busy === p.id ? "Déclenchement..." : `Lancer ${p.label}`}
+              {busy === p.id ? "Déclenchement…" : `Lancer ${p.label}`}
             </button>
           </div>
         ))}

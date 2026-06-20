@@ -25,7 +25,7 @@ export async function GET() {
       key: "grafana",
       name: "Grafana",
       category: "Visualisation",
-      description: "Dashboards logs / métriques / traces (corrélés).",
+      description: "Tableaux de bord des logs, métriques et traces, corrélés.",
       url: url("TOOL_GRAFANA_URL"),
     },
     {
@@ -67,14 +67,14 @@ export async function GET() {
       key: "renovate",
       name: "Renovate",
       category: "Patch management",
-      description: "Mises à jour automatiques des outils (charts, images, deps) par PR.",
+      description: "Mises à jour automatiques des outils (charts, images, dépendances) par Pull Request.",
       url: url("TOOL_RENOVATE_URL"),
     },
     {
       key: "harbor",
       name: "Harbor",
       category: "Supply chain",
-      description: "Registre OCI + dépôt de packages (air-gap).",
+      description: "Registre OCI et dépôt de paquets pour les environnements isolés d'Internet.",
       url: url("TOOL_HARBOR_URL"),
     },
     {
@@ -88,7 +88,7 @@ export async function GET() {
       key: "minio",
       name: "MinIO",
       category: "Stockage",
-      description: "Console du stockage objet S3 (long terme).",
+      description: "Console du stockage objet S3 (archivage long terme).",
       url: url("TOOL_MINIO_URL"),
     },
   ];

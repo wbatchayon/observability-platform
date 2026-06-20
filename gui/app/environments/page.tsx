@@ -48,7 +48,7 @@ export default function EnvironmentsPage() {
     });
     const d = await r.json();
     setBusy(false);
-    setCfgMsg(r.ok ? `✅ PR créée : ${d.prUrl}` : `❌ ${d.error}${fmtIssues(d.issues)}`);
+    setCfgMsg(r.ok ? `✅ Pull Request créée : ${d.prUrl}` : `❌ ${d.error}${fmtIssues(d.issues)}`);
   }
 
   async function submitSecrets() {
@@ -61,7 +61,11 @@ export default function EnvironmentsPage() {
     });
     const d = await r.json();
     setBusy(false);
-    setSecMsg(r.ok ? `✅ Secrets posés : ${d.secretsSet.join(", ")}` : `❌ ${d.error}${fmtIssues(d.issues)}`);
+    setSecMsg(
+      r.ok
+        ? `✅ Identifiants enregistrés : ${d.secretsSet.join(", ")}`
+        : `❌ ${d.error}${fmtIssues(d.issues)}`,
+    );
   }
 
   return (
@@ -71,7 +75,7 @@ export default function EnvironmentsPage() {
       <section className="card space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium">Valeurs (non sensibles)</h2>
-          <span className="text-xs text-slate-500">écrites via PR dans environments/&lt;env&gt;/</span>
+          <span className="text-xs text-slate-500">Proposées dans une Pull Request</span>
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
           {Object.keys(defaults).map((k) => (
@@ -85,15 +89,15 @@ export default function EnvironmentsPage() {
           ))}
         </div>
         <button onClick={submitConfig} disabled={busy} className="btn">
-          Valider &amp; créer la PR
+          Valider et créer la Pull Request
         </button>
         {cfgMsg && <p className="text-sm break-all">{cfgMsg}</p>}
       </section>
 
       <section className="card space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">Credentials (sensibles)</h2>
-          <span className="text-xs text-slate-500">chiffrés → GitHub Secrets (jamais en clair)</span>
+          <h2 className="text-lg font-medium">Identifiants (sensibles)</h2>
+          <span className="text-xs text-slate-500">Chiffrés dans GitHub Secrets, jamais en clair</span>
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
           {Object.keys(secretDefaults).map((k) => (
@@ -108,7 +112,7 @@ export default function EnvironmentsPage() {
           ))}
         </div>
         <button onClick={submitSecrets} disabled={busy} className="btn">
-          Enregistrer les credentials
+          Enregistrer les identifiants
         </button>
         {secMsg && <p className="text-sm break-all">{secMsg}</p>}
       </section>
@@ -118,7 +122,7 @@ export default function EnvironmentsPage() {
 
 function fmtIssues(issues?: Record<string, string[]>) {
   if (!issues) return "";
-  return " — " + Object.entries(issues).map(([k, v]) => `${k}: ${v.join(",")}`).join(" ; ");
+  return ". Détails : " + Object.entries(issues).map(([k, v]) => `${k} (${v.join(", ")})`).join(" ; ");
 }
 
 function Field({

@@ -3,8 +3,9 @@ import "./globals.css";
 import { Nav } from "@/components/Nav";
 
 export const metadata: Metadata = {
-  title: "Observability Platform — Console",
-  description: "Configuration, credentials et pilotage des pipelines de la plateforme d'observabilité",
+  title: "Console Observability Platform",
+  description:
+    "Configuration, identifiants et pilotage des pipelines de la plateforme d'observabilité.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

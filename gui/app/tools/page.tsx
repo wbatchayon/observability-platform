@@ -57,7 +57,7 @@ export default function ToolsPage() {
         </p>
       </div>
 
-      {loading && <p className="text-sm text-slate-400">Chargement...</p>}
+      {loading && <p className="text-sm text-slate-400">Chargement…</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tools.map((t) => {

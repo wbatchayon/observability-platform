@@ -46,7 +46,7 @@ export default function RunsPage() {
       </div>
 
       {err && <p className="text-sm text-bad">❌ {err}</p>}
-      {loading && <p className="text-sm text-slate-400">Chargement...</p>}
+      {loading && <p className="text-sm text-slate-400">Chargement…</p>}
 
       <div className="card p-0 overflow-hidden">
         <table className="w-full text-sm">
@@ -70,7 +70,7 @@ export default function RunsPage() {
                 </td>
                 <td className="px-4 py-2 text-right">
                   <a href={r.url} target="_blank" rel="noreferrer" className="text-accent underline">
-                    logs
+                    Voir les logs
                   </a>
                 </td>
               </tr>

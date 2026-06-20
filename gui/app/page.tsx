@@ -24,8 +24,8 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Console de management</h1>
           <p className="mt-1 max-w-2xl text-slate-400">
-            Configurez vos environnements, posez vos credentials et pilotez les pipelines CI/CD —
-            sans modifier le code source.
+            Configurez vos environnements, gérez vos identifiants et pilotez vos pipelines CI/CD en
+            toute sécurité, sans modifier le code source.
           </p>
         </div>
       </section>
@@ -36,7 +36,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <Info className="h-5 w-5 text-accent" />
             <p className="text-sm">
-              Vous n&apos;êtes pas connecté. Connectez-vous avec votre token GitHub pour commencer.
+              Vous n&apos;êtes pas connecté. Connectez-vous avec votre jeton GitHub pour commencer.
             </p>
           </div>
           <Link href="/login" className="btn whitespace-nowrap">
@@ -62,21 +62,21 @@ export default function Dashboard() {
             icon={<SlidersHorizontal className="h-5 w-5" />}
             title="Configurer"
             href="/environments"
-            desc="Saisir les valeurs d'un environnement (validées, écrites par PR)."
+            desc="Renseignez les valeurs d'un environnement. Elles sont validées puis proposées dans une Pull Request."
           />
           <StepCard
             n={2}
             icon={<Lock className="h-5 w-5" />}
-            title="Credentials"
+            title="Identifiants"
             href="/environments"
-            desc="Poser les secrets de façon chiffrée (GitHub Secrets)."
+            desc="Enregistrez vos identifiants de façon chiffrée dans GitHub Secrets."
           />
           <StepCard
             n={3}
             icon={<Rocket className="h-5 w-5" />}
-            title="Lancer & suivre"
+            title="Lancer et suivre"
             href="/pipelines"
-            desc="Déclencher validate / bootstrap / deploy et suivre l'exécution."
+            desc="Déclenchez la validation, le provisionnement ou le déploiement, puis suivez l'exécution."
           />
         </div>
       </div>

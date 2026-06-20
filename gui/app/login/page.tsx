@@ -52,21 +52,21 @@ export default function LoginPage() {
       ) : (
         <div className="card space-y-3">
           <div>
-            <label className="label">Token GitHub (scope repo, workflow)</label>
+            <label className="label">Jeton GitHub (portées repo et workflow)</label>
             <input
               type="password"
               className="input"
-              placeholder="ghp_..."
+              placeholder="ghp_…"
               value={token}
               onChange={(e) => setToken(e.target.value)}
             />
             <p className="text-xs text-slate-500 mt-1">
-              Le token reste dans une session chiffrée (cookie httpOnly) et n&apos;est jamais stocké
+              Le jeton reste dans une session chiffrée (cookie httpOnly) et n&apos;est jamais stocké
               côté serveur.
             </p>
           </div>
           <button onClick={connect} disabled={busy || !token} className="btn">
-            {busy ? "Connexion..." : "Se connecter"}
+            {busy ? "Connexion…" : "Se connecter"}
           </button>
         </div>
       )}
