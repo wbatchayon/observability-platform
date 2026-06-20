@@ -20,6 +20,19 @@ export function client(token: string): Octokit {
   return new Octokit({ auth: token });
 }
 
+// Client GitHub utilisé pour AGIR sur le dépôt :
+// - connexion GitHub : jeton de l'utilisateur (ghToken) ;
+// - connexion Google/SSO : jeton de service côté serveur (GITHUB_SERVICE_TOKEN).
+export function githubClient(ghToken?: string): Octokit {
+  const token = ghToken || process.env.GITHUB_SERVICE_TOKEN;
+  if (!token) {
+    throw new Error(
+      "Aucune identité GitHub disponible : définissez GITHUB_SERVICE_TOKEN pour les connexions Google/SSO.",
+    );
+  }
+  return new Octokit({ auth: token });
+}
+
 // Contrôle d'accès applicatif : seuls les utilisateurs autorisés peuvent ouvrir une session.
 // Ordre : allowlist de logins -> appartenance à une organisation -> accès en écriture au dépôt.
 export async function isAuthorized(octo: Octokit, login: string): Promise<boolean> {

@@ -25,8 +25,12 @@ GitHub.
 |---|---|
 | `SESSION_SECRET` | clé de chiffrement de session (≥ 32 caractères) |
 | `GITHUB_REPOSITORY` | dépôt cible au format `owner/repo` |
-| `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | (optionnel) active la connexion « Se connecter avec GitHub » (OAuth App) |
-| `GUI_BASE_URL` | (optionnel) URL publique de la console pour le callback OAuth (sinon dérivée des en-têtes) |
+| `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | (optionnel) connexion « Se connecter avec GitHub » (OAuth App) |
+| `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` | (optionnel) connexion « Se connecter avec Google » (Gmail) |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_LABEL` | (optionnel) connexion **SSO** OIDC générique (Okta, Auth0, Keycloak, Azure AD…) |
+| `GITHUB_SERVICE_TOKEN` | jeton GitHub de service — **requis pour les connexions Google/SSO** (le serveur agit sur le dépôt avec ce jeton) |
+| `ALLOWED_EMAILS` / `ALLOWED_EMAIL_DOMAIN` | autorisation des connexions Google/SSO (liste d'emails ou domaine) |
+| `GUI_BASE_URL` | (optionnel) URL publique de la console pour les callbacks OAuth (sinon dérivée des en-têtes) |
 | `DEPLOY_REF` | (optionnel) ref Git ciblée par les dispatch (défaut `main`) |
 | `ALLOWED_GITHUB_LOGINS` | (optionnel) allowlist de logins autorisés (séparés par des virgules) |
 | `ALLOWED_GITHUB_ORG` | (optionnel) organisation dont l'appartenance autorise l'accès |
@@ -34,18 +38,21 @@ GitHub.
 
 ## Connexion
 
-Deux méthodes :
+Plusieurs fournisseurs, affichés s'ils sont configurés. Callback : `/api/auth/<provider>/callback`.
 
-1. **OAuth GitHub** (recommandé, sans jeton) : bouton « Se connecter avec GitHub ». Nécessite une
-   **OAuth App** GitHub :
-   - Settings → Developer settings → OAuth Apps → New OAuth App
-   - Homepage URL : `https://<votre-domaine>`
-   - Authorization callback URL : `https://<votre-domaine>/api/auth/oauth/callback`
-   - Renseigner `GITHUB_OAUTH_CLIENT_ID` et `GITHUB_OAUTH_CLIENT_SECRET` (et `GUI_BASE_URL`).
-2. **Jeton personnel** : la page de connexion propose un lien « Générer un jeton » avec les portées
-   `repo` et `workflow` pré-remplies.
+| Méthode | Activation | Autorisation |
+|---|---|---|
+| **Google (Gmail)** | `GOOGLE_OAUTH_CLIENT_ID/SECRET` + `GITHUB_SERVICE_TOKEN` | `ALLOWED_EMAILS` / `ALLOWED_EMAIL_DOMAIN` |
+| **SSO (OIDC)** | `OIDC_ISSUER` + `OIDC_CLIENT_ID/SECRET` + `GITHUB_SERVICE_TOKEN` | `ALLOWED_EMAILS` / `ALLOWED_EMAIL_DOMAIN` |
+| **GitHub (OAuth)** | `GITHUB_OAUTH_CLIENT_ID/SECRET` | accès en écriture au dépôt |
+| **Jeton GitHub** | toujours disponible (lien « Générer un jeton ») | accès en écriture au dépôt |
 
-Dans les deux cas, l'accès exige un droit en écriture sur le dépôt (cf. contrôle d'accès).
+> **Google/SSO** authentifient l'**identité** ; les actions GitHub (PR, secrets, pipelines) sont
+> ensuite exécutées par le serveur avec **`GITHUB_SERVICE_TOKEN`**. Sans ce jeton, seules les
+> connexions GitHub (OAuth/jeton) permettent d'agir.
+
+Exemple (callback) : pour Google, *Authorized redirect URI* =
+`https://<domaine>/api/auth/google/callback`.
 
 ## Développement
 
@@ -83,9 +90,9 @@ NetworkPolicies, Ingress). Image tirée depuis Harbor (air-gap). Voir
 
 ## Sécurité
 
-- **Contrôle d'accès** : seuls les utilisateurs disposant d'un accès en écriture au dépôt (ou
-  figurant dans `ALLOWED_GITHUB_LOGINS` / membres de `ALLOWED_GITHUB_ORG`) peuvent ouvrir une
-  session. La connexion est refusée (403) sinon.
+- **Contrôle d'accès** : GitHub → accès en écriture au dépôt (ou `ALLOWED_GITHUB_LOGINS` /
+  `ALLOWED_GITHUB_ORG`) ; Google/SSO → `ALLOWED_EMAILS` / `ALLOWED_EMAIL_DOMAIN`. Connexion refusée
+  sinon.
 - En-têtes de sécurité (CSP, X-Frame-Options DENY, HSTS, etc.).
 - Jeton utilisateur en session chiffrée (jamais loggé, jamais persisté).
 - Secrets via sealed box → GitHub Secrets (jamais en clair).

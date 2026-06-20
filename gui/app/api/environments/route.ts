@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireToken } from "@/lib/session";
-import { client, targetRepo, writeEnvConfigPR } from "@/lib/github";
+import { requireUser, getSession } from "@/lib/session";
+import { githubClient, targetRepo, writeEnvConfigPR } from "@/lib/github";
 import { envValuesSchema, toEnvValuesYaml } from "@/lib/validation";
 import { serverError } from "@/lib/http";
 
@@ -8,9 +8,8 @@ export const runtime = "nodejs";
 
 // Soumet la configuration d'un environnement : validée puis écrite via une PR (GitOps).
 export async function POST(req: NextRequest) {
-  let auth;
   try {
-    auth = await requireToken();
+    await requireUser();
   } catch {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
@@ -26,7 +25,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const { owner, repo } = targetRepo();
-    const octo = client(auth.token);
+    const session = await getSession();
+    const octo = githubClient(session.ghToken);
     const yaml = toEnvValuesYaml(parsed.data);
     const { prUrl, branch } = await writeEnvConfigPR(octo, owner, repo, parsed.data.environment, yaml);
     return NextResponse.json({ ok: true, prUrl, branch });

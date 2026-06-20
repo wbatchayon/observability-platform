@@ -1,9 +1,19 @@
 import { getIronSession, SessionOptions } from "iron-session";
 import { cookies } from "next/headers";
 
+export type ProviderId = "github" | "google" | "oidc" | "token";
+
+export interface SessionUser {
+  login: string; // identifiant affiché (login GitHub ou email)
+  email?: string;
+  provider: ProviderId;
+}
+
 export interface SessionData {
-  token?: string; // token GitHub de l'utilisateur (session uniquement)
-  login?: string; // identifiant GitHub
+  user?: SessionUser;
+  // Jeton GitHub de l'utilisateur (présent uniquement pour les connexions GitHub).
+  // Pour Google/SSO, les actions GitHub utilisent GITHUB_SERVICE_TOKEN côté serveur.
+  ghToken?: string;
 }
 
 const password = process.env.SESSION_SECRET || "";
@@ -26,10 +36,10 @@ export async function getSession() {
   return getIronSession<SessionData>(cookies(), sessionOptions);
 }
 
-export async function requireToken(): Promise<{ token: string; login: string }> {
+export async function requireUser(): Promise<SessionUser> {
   const session = await getSession();
-  if (!session.token) {
+  if (!session.user) {
     throw new Error("Non authentifié");
   }
-  return { token: session.token, login: session.login || "" };
+  return session.user;
 }

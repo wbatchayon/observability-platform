@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireToken } from "@/lib/session";
+import { requireUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 // Lecture des variables TOOL_* à l'exécution (pas de prérendu statique au build).
@@ -22,7 +22,7 @@ function url(name: string): string | null {
 
 export async function GET() {
   try {
-    await requireToken();
+    await requireUser();
   } catch {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }

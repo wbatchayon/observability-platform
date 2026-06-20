@@ -1,21 +1,21 @@
 import { NextResponse } from "next/server";
-import { requireToken } from "@/lib/session";
-import { client, targetRepo, listRuns } from "@/lib/github";
+import { requireUser, getSession } from "@/lib/session";
+import { githubClient, targetRepo, listRuns } from "@/lib/github";
 import { serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
 // Suivi des exécutions (statut/conclusion/liens).
 export async function GET() {
-  let auth;
   try {
-    auth = await requireToken();
+    await requireUser();
   } catch {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
   try {
     const { owner, repo } = targetRepo();
-    const octo = client(auth.token);
+    const session = await getSession();
+    const octo = githubClient(session.ghToken);
     const runs = await listRuns(octo, owner, repo);
     return NextResponse.json({ runs });
   } catch (e) {

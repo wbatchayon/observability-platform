@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireToken } from "@/lib/session";
-import { client, targetRepo, dispatchWorkflow, deployRef } from "@/lib/github";
+import { requireUser, getSession } from "@/lib/session";
+import { githubClient, targetRepo, dispatchWorkflow, deployRef } from "@/lib/github";
 import { dispatchSchema } from "@/lib/validation";
 import { serverError } from "@/lib/http";
 
@@ -8,9 +8,8 @@ export const runtime = "nodejs";
 
 // Déclenche un pipeline (validate/bootstrap/deploy) via workflow_dispatch — sans toucher au code.
 export async function POST(req: NextRequest) {
-  let auth;
   try {
-    auth = await requireToken();
+    await requireUser();
   } catch {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
@@ -26,7 +25,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const { owner, repo } = targetRepo();
-    const octo = client(auth.token);
+    const session = await getSession();
+    const octo = githubClient(session.ghToken);
     await dispatchWorkflow(octo, owner, repo, "deploy.yaml", deployRef(), {
       environment: parsed.data.environment,
       action: parsed.data.pipeline,

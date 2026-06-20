@@ -1,22 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Github, KeyRound, ExternalLink } from "lucide-react";
+import { Github, Mail, KeyRound, ExternalLink, LogIn } from "lucide-react";
 
 const GENERATE_TOKEN_URL =
   "https://github.com/settings/tokens/new?scopes=repo,workflow&description=Observability%20Console";
 
-const errors: Record<string, string> = {
+const errorMessages: Record<string, string> = {
   state: "Échec de vérification de sécurité (state). Réessayez.",
-  token: "Impossible d'obtenir un jeton GitHub. Réessayez.",
-  forbidden: "Accès refusé : un accès en écriture au dépôt est requis.",
-  oauth_disabled: "La connexion GitHub n'est pas configurée sur ce serveur.",
+  token: "Échec de l'échange OAuth. Réessayez.",
+  forbidden: "Accès refusé : identité non autorisée (email/domaine ou accès au dépôt).",
+  provider_disabled: "Ce fournisseur de connexion n'est pas configuré sur ce serveur.",
+};
+
+interface ProviderInfo {
+  id: "github" | "google" | "oidc";
+  label: string;
+}
+
+const providerIcon: Record<string, typeof Github> = {
+  github: Github,
+  google: Mail,
+  oidc: LogIn,
 };
 
 export default function LoginPage() {
   const [token, setToken] = useState("");
   const [login, setLogin] = useState<string | null>(null);
-  const [oauth, setOauth] = useState(false);
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -25,11 +36,11 @@ export default function LoginPage() {
       .then((r) => r.json())
       .then((d) => {
         setLogin(d.login);
-        setOauth(!!d.oauthEnabled);
+        setProviders(d.providers || []);
       })
       .catch(() => {});
     const err = new URLSearchParams(window.location.search).get("error");
-    if (err) setMsg(errors[err] || "Échec de connexion.");
+    if (err) setMsg(errorMessages[err] || "Échec de connexion.");
   }, []);
 
   async function connect() {
@@ -72,21 +83,24 @@ export default function LoginPage() {
         </div>
       ) : (
         <>
-          {/* OAuth GitHub : affiché uniquement lorsqu'il est réellement configuré. */}
-          {oauth && (
+          {providers.length > 0 && (
             <div className="card space-y-3">
-              <h2 className="text-sm font-medium text-slate-300">Recommandé</h2>
-              <a href="/api/auth/oauth/start" className="btn w-full">
-                <Github className="h-4 w-4" />
-                Se connecter avec GitHub
-              </a>
+              <h2 className="text-sm font-medium text-slate-300">Connexion avec un fournisseur</h2>
+              {providers.map((p) => {
+                const Icon = providerIcon[p.id] ?? LogIn;
+                return (
+                  <a key={p.id} href={`/api/auth/${p.id}/start`} className="btn w-full">
+                    <Icon className="h-4 w-4" />
+                    Se connecter avec {p.label}
+                  </a>
+                );
+              })}
             </div>
           )}
 
-          {/* Connexion par jeton personnel (méthode primaire si l'OAuth n'est pas configuré). */}
           <div className="card space-y-3">
             <h2 className="text-sm font-medium text-slate-300">
-              {oauth ? "Par jeton personnel" : "Connexion par jeton GitHub"}
+              {providers.length > 0 ? "Ou par jeton GitHub" : "Connexion par jeton GitHub"}
             </h2>
             <div>
               <label className="label">Jeton GitHub (portées repo et workflow)</label>
@@ -112,9 +126,8 @@ export default function LoginPage() {
               {busy ? "Connexion…" : "Se connecter avec un jeton"}
             </button>
             <p className="text-xs text-slate-500">
-              Accès réservé aux utilisateurs disposant d&apos;un accès en écriture au dépôt. Le jeton
-              reste dans une session chiffrée (cookie httpOnly) et n&apos;est jamais stocké côté
-              serveur.
+              Accès réservé aux identités autorisées (email/domaine pour Google/SSO, accès en
+              écriture au dépôt pour GitHub). Aucune donnée sensible n&apos;est stockée côté serveur.
             </p>
           </div>
         </>

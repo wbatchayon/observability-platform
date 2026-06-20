@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { client, isAuthorized } from "@/lib/github";
-import { oauthEnabled } from "@/lib/oauth";
+import { enabledProviders } from "@/lib/auth-providers";
 import { isConfigError, configError, serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -11,9 +11,10 @@ export async function GET() {
   try {
     const session = await getSession();
     return NextResponse.json({
-      authenticated: !!session.token,
-      login: session.login || null,
-      oauthEnabled: oauthEnabled(),
+      authenticated: !!session.user,
+      login: session.user?.login || null,
+      provider: session.user?.provider || null,
+      providers: enabledProviders(), // OAuth/OIDC activés (github/google/oidc)
     });
   } catch (e) {
     if (isConfigError(e)) return configError(e);
@@ -21,7 +22,7 @@ export async function GET() {
   }
 }
 
-// Connexion : l'utilisateur fournit son token GitHub ; on le valide et on ouvre la session.
+// Connexion par jeton GitHub personnel (méthode toujours disponible).
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const token = typeof body.token === "string" ? body.token.trim() : "";
@@ -30,8 +31,6 @@ export async function POST(req: NextRequest) {
   }
 
   const octo = client(token);
-
-  // 1. Le jeton est-il valide ?
   let login: string;
   try {
     const { data } = await octo.users.getAuthenticated();
@@ -40,11 +39,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Jeton GitHub invalide" }, { status: 401 });
   }
 
-  // 2. L'utilisateur est-il autorisé (allowlist / org / accès en écriture au dépôt) ?
   try {
     if (!(await isAuthorized(octo, login))) {
       return NextResponse.json(
-        { error: "Accès refusé : un accès en écriture au dépôt (ou une autorisation explicite) est requis." },
+        { error: "Accès refusé : un accès en écriture au dépôt est requis." },
         { status: 403 },
       );
     }
@@ -54,8 +52,8 @@ export async function POST(req: NextRequest) {
   }
 
   const session = await getSession();
-  session.token = token;
-  session.login = login;
+  session.user = { login, provider: "token" };
+  session.ghToken = token;
   await session.save();
   return NextResponse.json({ authenticated: true, login });
 }
