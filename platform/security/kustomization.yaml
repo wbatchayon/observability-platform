@@ -11,4 +11,5 @@ resources:
   - network-policies/allow-dns.yaml
   - network-policies/allow-flows.yaml
   - network-policies/allow-egress.yaml
+  - network-policies/incident.yaml
   - rbac/observability-rbac.yaml
