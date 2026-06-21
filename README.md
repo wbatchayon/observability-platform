@@ -23,7 +23,8 @@ $EDITOR environments/prod/*.tfvars environments/prod/*.values.yaml
 make encrypt ENV=prod          # chiffre les secrets via SOPS
 
 # 3. Provisionner le socle puis déployer la plateforme
-make bootstrap ENV=prod        # cluster -> Vault -> Flux -> dépôt packages
+make preflight ENV=prod        # vérifie les prérequis du cluster cible
+make bootstrap ENV=prod        # cluster -> Harbor -> Vault -> Flux
 make deploy    ENV=prod        # FluxCD réconcilie la plateforme
 
 # 4. Configurer les agents sur les VMs (air-gap)
@@ -50,10 +51,15 @@ Détails : [`docs/architecture/`](docs/architecture/) · fonctionnement : [`docs
 
 ## Prérequis
 
-- **Kubernetes** 1.25+ (provisionné par `bootstrap/00-cluster`, défaut kubeadm on-prem)
+- **Kubernetes** 1.25+ — provisionné par `bootstrap/00-cluster` (kubeadm on-prem)
+  ou cluster existant (Rancher/RKE2/k3s, EKS/GKE/AKS, Talos…) ciblé par kubeconfig.
+- **StorageClass par défaut** (ou `STORAGE_CLASS`), **LoadBalancer** (ou `LB_SERVICE_TYPE=NodePort`),
+  **CNI compatible NetworkPolicy**. Matrice des distributions : [`docs/how-it-works/portability.md`](docs/how-it-works/portability.md).
+- **Dimensionnement / ressources minimales** (CPU/RAM/stockage par composant, profils POC & prod) :
+  [`docs/architecture/requirements.md`](docs/architecture/requirements.md).
 - Outils CLI : `terraform` ≥ 1.6, `flux`, `helm`, `kubectl`, `ansible`, `sops` + `age`
 - Outils de validation (CI) : `yamllint`, `tflint`, `kubeconform`, `trivy`, `checkov`, `gitleaks`, `kubescape`
-- Un dépôt Git (la plateforme est pilotée par GitOps via PR — voir [`docs/how-it-works/git-workflow.md`](docs/how-it-works/git-workflow.md))
+- Un dépôt Git (GitOps via PR — voir [`docs/how-it-works/git-workflow.md`](docs/how-it-works/git-workflow.md))
 
 ---
 
@@ -76,6 +82,16 @@ make scan                # trivy / checkov / gitleaks / kubescape
 make bootstrap ENV=dev   # provisionne le socle
 make deploy ENV=dev      # réconcilie la plateforme via Flux
 ```
+
+---
+
+## Contribuer & communauté
+
+- [Guide de contribution](CONTRIBUTING.md) · [Code de conduite](CODE_OF_CONDUCT.md)
+- [Politique de sécurité](SECURITY.md) (signalement responsable des vulnérabilités)
+- Licence : [Apache 2.0](LICENSE)
+
+Toute PR vers `main` passe par la CI et l'approbation du [CODEOWNERS](.github/CODEOWNERS).
 
 ---
 

@@ -95,6 +95,8 @@ export function providers(): Provider[] {
           headers: { Authorization: `Bearer ${accessToken}` },
         }).then((r) => r.json());
         const email: string | undefined = ep.email;
+        // Rejeter les emails non vérifiés (Google renvoie email_verified).
+        if (ep.email_verified !== true) return null;
         if (!email || !emailAllowed(email)) return null;
         return { user: { login: email, email, provider: "google" } };
       },

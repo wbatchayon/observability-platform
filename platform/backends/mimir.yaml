@@ -5,6 +5,9 @@ metadata:
   name: mimir
   namespace: backends
 spec:
+  dependsOn:
+    - name: minio
+      namespace: storage
   interval: 30m
   chart:
     spec:

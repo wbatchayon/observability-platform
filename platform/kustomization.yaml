@@ -1,0 +1,16 @@
+---
+# Agrégateur de la plateforme : la Kustomization Flux `platform`
+# (clusters/<env>/platform.yaml, path: ./platform) construit ce fichier.
+# L'ordre listé est indicatif ; l'ordonnancement réel des composants est
+# assuré par les `spec.dependsOn` des HelmReleases (security → storage →
+# backends → ingestion/visualization/monitoring/incident).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - security
+  - storage
+  - backends
+  - ingestion
+  - visualization
+  - monitoring
+  - incident

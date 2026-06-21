@@ -26,6 +26,13 @@ metadata:
   name: grafana
   namespace: visualization
 spec:
+  dependsOn:
+    - name: loki
+      namespace: backends
+    - name: mimir
+      namespace: backends
+    - name: tempo
+      namespace: backends
   interval: 30m
   chart:
     spec:

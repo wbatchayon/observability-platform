@@ -9,7 +9,7 @@ spec:
   interval: 5m
   ref:
     branch: main
-  url: https://github.com/org/observability-platform
+  url: https://github.com/wbatchayon/observability-platform
   secretRef:
     name: flux-system
 ---
