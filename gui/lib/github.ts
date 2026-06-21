@@ -193,6 +193,96 @@ export async function listRuns(octo: Octokit, owner: string, repo: string) {
     event: r.event,
     branch: r.head_branch,
     createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    runNumber: r.run_number,
     url: r.html_url,
   }));
+}
+
+// Détail d'une exécution : jobs et étapes (suivi quasi-temps réel des pipelines).
+export async function getRunWithJobs(octo: Octokit, owner: string, repo: string, runId: number) {
+  const { data: run } = await octo.actions.getWorkflowRun({ owner, repo, run_id: runId });
+  const { data: jobsData } = await octo.actions.listJobsForWorkflowRun({
+    owner,
+    repo,
+    run_id: runId,
+    per_page: 50,
+  });
+  return {
+    id: run.id,
+    name: run.name || run.display_title,
+    status: run.status,
+    conclusion: run.conclusion,
+    event: run.event,
+    branch: run.head_branch,
+    createdAt: run.created_at,
+    updatedAt: run.updated_at,
+    runNumber: run.run_number,
+    url: run.html_url,
+    jobs: jobsData.jobs.map((j) => ({
+      id: j.id,
+      name: j.name,
+      status: j.status,
+      conclusion: j.conclusion,
+      startedAt: j.started_at,
+      completedAt: j.completed_at,
+      url: j.html_url,
+      steps: (j.steps || []).map((s) => ({
+        name: s.name,
+        status: s.status,
+        conclusion: s.conclusion,
+        number: s.number,
+      })),
+    })),
+  };
+}
+
+// Lit la config (ConfigMap env-values) d'un environnement depuis la branche par défaut,
+// puis tente la branche de config GUI (plus récente) pour refléter les changements en attente.
+export async function readEnvConfig(
+  octo: Octokit,
+  owner: string,
+  repo: string,
+  environment: string,
+): Promise<Record<string, string> | null> {
+  const path = `environments/${environment}/env-values.yaml`;
+  const refs = [`gui/config-${environment}`, "main"];
+  for (const ref of refs) {
+    try {
+      const { data } = await octo.repos.getContent({ owner, repo, path, ref });
+      if (Array.isArray(data) || !("content" in data)) continue;
+      const text = Buffer.from(data.content, "base64").toString("utf-8");
+      return parseConfigMapData(text);
+    } catch {
+      // ref/fichier absent -> on tente la suivante
+    }
+  }
+  return null;
+}
+
+// Parse minimaliste de la section data: d'un ConfigMap (clé: "valeur").
+function parseConfigMapData(yaml: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  let inData = false;
+  for (const raw of yaml.split("\n")) {
+    if (/^data:\s*$/.test(raw)) {
+      inData = true;
+      continue;
+    }
+    if (inData) {
+      if (/^\S/.test(raw)) break; // fin de l'indentation data:
+      const m = raw.match(/^\s+([A-Za-z0-9_]+):\s*(.*)$/);
+      if (m) {
+        let val = m[2].trim();
+        if (
+          (val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))
+        ) {
+          val = val.slice(1, -1);
+        }
+        out[m[1]] = val;
+      }
+    }
+  }
+  return out;
 }
