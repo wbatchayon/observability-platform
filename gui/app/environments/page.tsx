@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/lib/i18n";
 
 const defaults = {
   environment: "dev",
@@ -32,6 +33,7 @@ const secretDefaults = {
 };
 
 export default function EnvironmentsPage() {
+  const { t } = useI18n();
   const [cfg, setCfg] = useState<Record<string, string>>(defaults);
   const [sec, setSec] = useState<Record<string, string>>(secretDefaults);
   const [cfgMsg, setCfgMsg] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export default function EnvironmentsPage() {
     });
     const d = await r.json();
     setBusy(false);
-    setCfgMsg(r.ok ? `✅ Pull Request créée : ${d.prUrl}` : `❌ ${d.error}${fmtIssues(d.issues)}`);
+    setCfgMsg(r.ok ? `✅ ${t("env.prCreated")} ${d.prUrl}` : `❌ ${d.error}${fmtIssues(d.issues)}`);
   }
 
   async function submitSecrets() {
@@ -63,19 +65,19 @@ export default function EnvironmentsPage() {
     setBusy(false);
     setSecMsg(
       r.ok
-        ? `✅ Identifiants enregistrés : ${d.secretsSet.join(", ")}`
+        ? `✅ ${t("env.secretsSaved")} ${d.secretsSet.join(", ")}`
         : `❌ ${d.error}${fmtIssues(d.issues)}`,
     );
   }
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-semibold">Configuration d&apos;environnement</h1>
+      <h1 className="text-2xl font-semibold">{t("env.title")}</h1>
 
       <section className="card space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">Valeurs (non sensibles)</h2>
-          <span className="text-xs text-slate-500">Proposées dans une Pull Request</span>
+          <h2 className="text-lg font-medium">{t("env.values")}</h2>
+          <span className="text-xs text-slate-500">{t("env.valuesHint")}</span>
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
           {Object.keys(defaults).map((k) => (
@@ -89,15 +91,15 @@ export default function EnvironmentsPage() {
           ))}
         </div>
         <button onClick={submitConfig} disabled={busy} className="btn">
-          Valider et créer la Pull Request
+          {t("env.validate")}
         </button>
         {cfgMsg && <p className="text-sm break-all">{cfgMsg}</p>}
       </section>
 
       <section className="card space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">Identifiants (sensibles)</h2>
-          <span className="text-xs text-slate-500">Chiffrés dans GitHub Secrets, jamais en clair</span>
+          <h2 className="text-lg font-medium">{t("env.secrets")}</h2>
+          <span className="text-xs text-slate-500">{t("env.secretsHint")}</span>
         </div>
         <div className="grid sm:grid-cols-2 gap-3">
           {Object.keys(secretDefaults).map((k) => (
@@ -112,7 +114,7 @@ export default function EnvironmentsPage() {
           ))}
         </div>
         <button onClick={submitSecrets} disabled={busy} className="btn">
-          Enregistrer les identifiants
+          {t("env.saveSecrets")}
         </button>
         {secMsg && <p className="text-sm break-all">{secMsg}</p>}
       </section>

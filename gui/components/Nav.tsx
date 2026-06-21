@@ -3,20 +3,34 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Hexagon, Github, Menu, X } from "lucide-react";
-
-const links = [
-  { href: "/", label: "Tableau de bord" },
-  { href: "/environments", label: "Configuration" },
-  { href: "/pipelines", label: "Pipelines" },
-  { href: "/runs", label: "Suivi" },
-  { href: "/tools", label: "Outils" },
-];
+import { Hexagon, Github, Menu, X, Languages } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export function Nav() {
   const path = usePathname();
   const [open, setOpen] = useState(false);
+  const { t, locale, setLocale } = useI18n();
   const isActive = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
+
+  const links = [
+    { href: "/", label: t("nav.dashboard") },
+    { href: "/environments", label: t("nav.config") },
+    { href: "/pipelines", label: t("nav.pipelines") },
+    { href: "/runs", label: t("nav.runs") },
+    { href: "/tools", label: t("nav.tools") },
+  ];
+
+  const LangToggle = ({ className = "" }: { className?: string }) => (
+    <button
+      onClick={() => setLocale(locale === "fr" ? "en" : "fr")}
+      className={`btn-ghost ${className}`}
+      aria-label="Language"
+      title={locale === "fr" ? "Switch to English" : "Passer en français"}
+    >
+      <Languages className="h-4 w-4" />
+      {locale.toUpperCase()}
+    </button>
+  );
 
   return (
     <header className="sticky top-0 z-20 border-b border-white/10 bg-black/40 backdrop-blur-xl">
@@ -26,7 +40,6 @@ export function Nav() {
           <span className="text-sm sm:text-base">Observability Console</span>
         </Link>
 
-        {/* Navigation bureau */}
         <nav className="hidden items-center gap-1 md:flex">
           {links.map((l) => (
             <Link
@@ -41,23 +54,21 @@ export function Nav() {
               {l.label}
             </Link>
           ))}
-          <Link href="/login" className="btn-ghost ml-2">
+          <LangToggle className="ml-2" />
+          <Link href="/login" className="btn-ghost ml-1">
             <Github className="h-4 w-4" />
-            Compte
+            {t("nav.account")}
           </Link>
         </nav>
 
-        {/* Bouton menu mobile */}
-        <button
-          aria-label="Menu"
-          className="btn-ghost md:hidden"
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-2 md:hidden">
+          <LangToggle />
+          <button aria-label="Menu" className="btn-ghost" onClick={() => setOpen((v) => !v)}>
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
-      {/* Menu déroulant mobile */}
       {open && (
         <nav className="border-t border-white/10 bg-black/60 px-4 py-3 md:hidden">
           <div className="flex flex-col gap-1">
@@ -79,7 +90,7 @@ export function Nav() {
               className="mt-1 flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm hover:bg-white/10"
             >
               <Github className="h-4 w-4" />
-              Compte
+              {t("nav.account")}
             </Link>
           </div>
         </nav>
