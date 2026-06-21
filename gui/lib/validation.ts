@@ -1,21 +1,44 @@
 import { z } from "zod";
 
-// Valeurs non sensibles d'un environnement (alignées sur environments/<env>/env-values.yaml).
-export const envValuesSchema = z.object({
-  environment: z.enum(["dev", "staging", "prod"]),
-  HARBOR_REGISTRY: z.string().min(1),
-  VAULT_ADDR: z.string().url().or(z.string().startsWith("https://")),
-  TENANT_ID: z.string().min(1),
-  MINIO_REPLICAS: z.coerce.number().int().min(1),
-  MINIO_VOLUME_SIZE: z.string().regex(/^\d+(Gi|Ti)$/),
-  LOKI_RETENTION: z.string().regex(/^\d+h$/),
-  MIMIR_RETENTION: z.string().regex(/^\d+h$/),
-  TEMPO_RETENTION: z.string().regex(/^\d+h$/),
-  OTEL_GATEWAY_REPLICAS: z.coerce.number().int().min(1),
-  TRACE_SAMPLING_PERCENT: z.coerce.number().int().min(0).max(100),
-  GRAFANA_DOMAIN: z.string().min(3),
-  OTLP_DOMAIN: z.string().min(3),
+// Fournisseurs de cluster supportés (portabilité multi-cloud / on-prem / air-gap).
+export const clusterProviders = ["kubeadm", "existing", "eks", "gke", "aks", "talos"] as const;
+export type ClusterProvider = (typeof clusterProviders)[number];
+
+// Types de Service exposant le load balancer (portabilité réseau).
+export const lbServiceTypes = ["LoadBalancer", "NodePort", "ClusterIP"] as const;
+
+// Source des charts (Internet vs registre OCI interne pour les environnements isolés).
+export const chartSources = ["upstream", "harbor"] as const;
+
+// Knobs de portabilité — valeurs optionnelles avec défauts sûrs (alignés sur tfvars/env-values).
+export const portabilitySchema = z.object({
+  CLUSTER_PROVIDER: z.enum(clusterProviders).default("kubeadm"),
+  STORAGE_CLASS: z.string().min(1).default("standard"),
+  LB_SERVICE_TYPE: z.enum(lbServiceTypes).default("LoadBalancer"),
+  CHART_SOURCE: z.enum(chartSources).default("upstream"),
+  NETWORK_POLICIES_ENABLED: z.enum(["true", "false"]).default("true"),
 });
+
+export type Portability = z.infer<typeof portabilitySchema>;
+
+// Valeurs non sensibles d'un environnement (alignées sur environments/<env>/env-values.yaml).
+export const envValuesSchema = z
+  .object({
+    environment: z.enum(["dev", "staging", "prod"]),
+    HARBOR_REGISTRY: z.string().min(1),
+    VAULT_ADDR: z.string().url().or(z.string().startsWith("https://")),
+    TENANT_ID: z.string().min(1),
+    MINIO_REPLICAS: z.coerce.number().int().min(1),
+    MINIO_VOLUME_SIZE: z.string().regex(/^\d+(Gi|Ti)$/),
+    LOKI_RETENTION: z.string().regex(/^\d+h$/),
+    MIMIR_RETENTION: z.string().regex(/^\d+h$/),
+    TEMPO_RETENTION: z.string().regex(/^\d+h$/),
+    OTEL_GATEWAY_REPLICAS: z.coerce.number().int().min(1),
+    TRACE_SAMPLING_PERCENT: z.coerce.number().int().min(0).max(100),
+    GRAFANA_DOMAIN: z.string().min(3),
+    OTLP_DOMAIN: z.string().min(3),
+  })
+  .merge(portabilitySchema);
 
 export type EnvValues = z.infer<typeof envValuesSchema>;
 
@@ -35,6 +58,8 @@ export const secretsSchema = z.object({
   SMTP_PASSWORD: z.string().optional().default(""),
 });
 
+// Actions réellement supportées par le workflow deploy.yaml (inputs.action).
+// Les étapes de l'assistant (preflight/verify) sont mappées vers ces actions côté UI.
 export const dispatchSchema = z.object({
   pipeline: z.enum(["validate", "bootstrap", "deploy"]),
   environment: z.enum(["dev", "staging", "prod"]),
@@ -56,6 +81,12 @@ export function toEnvValuesYaml(v: EnvValues): string {
     TRACE_SAMPLING_PERCENT: String(v.TRACE_SAMPLING_PERCENT),
     GRAFANA_DOMAIN: v.GRAFANA_DOMAIN,
     OTLP_DOMAIN: v.OTLP_DOMAIN,
+    // Knobs de portabilité (cluster + réseau + stockage + source des charts).
+    CLUSTER_PROVIDER: v.CLUSTER_PROVIDER,
+    STORAGE_CLASS: v.STORAGE_CLASS,
+    LB_SERVICE_TYPE: v.LB_SERVICE_TYPE,
+    CHART_SOURCE: v.CHART_SOURCE,
+    NETWORK_POLICIES_ENABLED: v.NETWORK_POLICIES_ENABLED,
   };
   const lines = Object.entries(data).map(([k, val]) => `  ${k}: ${JSON.stringify(val)}`);
   return [
