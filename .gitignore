@@ -28,6 +28,3 @@ ansible/inventories/**/host_vars/**/vault.local
 dist/
 *.sbom.json
 *.tmp
-
-# Test Proxmox : ne jamais committer les credentials/état réels
-test/proxmox/terraform.tfvars

@@ -26,4 +26,3 @@ ignore: |
   node_modules/
   gui/node_modules/
   gui/.next/
-  test/cloud-init/
