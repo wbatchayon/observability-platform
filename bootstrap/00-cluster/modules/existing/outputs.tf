@@ -9,3 +9,9 @@ output "api_endpoint" {
   description = "Endpoint de l'API server du cluster existant."
   value       = local.endpoint
 }
+
+output "cluster_ca_certificate" {
+  description = "Certificat CA du cluster existant (si fourni)."
+  value       = var.ca_certificate
+  sensitive   = true
+}
