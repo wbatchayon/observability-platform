@@ -46,8 +46,8 @@ export default function PipelinesPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Pipelines</h1>
 
-      <div className="card flex items-center gap-4">
-        <div>
+      <div className="card flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="w-full sm:w-auto">
           <label className="label">Environnement cible</label>
           <select className="input" value={environment} onChange={(e) => setEnvironment(e.target.value)}>
             <option value="dev">dev</option>
@@ -55,7 +55,7 @@ export default function PipelinesPage() {
             <option value="prod">prod</option>
           </select>
         </div>
-        <p className="text-xs text-slate-500 self-end pb-2">
+        <p className="text-xs text-slate-500 sm:self-end sm:pb-2">
           Déclenche le workflow de déploiement via l&apos;API GitHub, sans modifier le code source.
         </p>
       </div>
