@@ -7,6 +7,11 @@ resources:
   - kyverno.yaml
   - kyverno-policies/require-signed-images.yaml
   - kyverno-policies/pod-security.yaml
+  # --- NetworkPolicies (NETWORK_POLICIES_ENABLED) ---
+  # Kustomize ne sait pas supprimer conditionnellement une ressource via une variable
+  # Flux. Pour DÉSACTIVER les NetworkPolicies sur un cluster qui ne supporte pas
+  # l'API networking (ou sans CNI NetworkPolicy), COMMENTEZ les 5 lignes ci-dessous.
+  # Voir platform/security/README.md (section « Désactiver les NetworkPolicies »).
   - network-policies/default-deny.yaml
   - network-policies/allow-dns.yaml
   - network-policies/allow-flows.yaml

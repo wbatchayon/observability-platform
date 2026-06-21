@@ -27,6 +27,7 @@ spec:
             name: queue
           spec:
             accessModes: [ReadWriteOnce]
+            storageClassName: ${STORAGE_CLASS}
             resources:
               requests:
                 storage: 5Gi
