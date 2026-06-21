@@ -24,6 +24,7 @@
 - [ ] Aucun secret en clair (SOPS utilisé pour toute donnée sensible)
 - [ ] Documentation mise à jour (`docs/`) si nécessaire
 - [ ] Le `CODEOWNERS` concerné a été sollicité pour revue
+- [ ] **Approbation de @wbatchayon obtenue** (obligatoire avant tout merge vers `main`)
 
 ## Notes GitOps
 
