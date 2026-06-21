@@ -1,0 +1,73 @@
+---
+# Overlay "internet" (CHART_SOURCE=internet) : bascule les HelmRepository OCI/Harbor
+# vers les dépôts Helm publics upstream. Pour POC connecté / cluster sans Harbor.
+# Build : kustomize build platform-overlays/internet/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../platform
+
+patches:
+  # grafana (visualization + backends Loki/Mimir/Tempo)
+  - target: { kind: HelmRepository, name: grafana }
+    patch: |
+      - op: replace
+        path: /spec/type
+        value: default
+      - op: replace
+        path: /spec/url
+        value: https://grafana.github.io/helm-charts
+  # MinIO
+  - target: { kind: HelmRepository, name: minio, namespace: storage }
+    patch: |
+      - op: replace
+        path: /spec/type
+        value: default
+      - op: replace
+        path: /spec/url
+        value: https://charts.min.io/
+  # OpenTelemetry
+  - target: { kind: HelmRepository, name: opentelemetry, namespace: ingestion }
+    patch: |
+      - op: replace
+        path: /spec/type
+        value: default
+      - op: replace
+        path: /spec/url
+        value: https://open-telemetry.github.io/opentelemetry-helm-charts
+  # Prometheus Community
+  - target: { kind: HelmRepository, name: prometheus-community, namespace: monitoring }
+    patch: |
+      - op: replace
+        path: /spec/type
+        value: default
+      - op: replace
+        path: /spec/url
+        value: https://prometheus-community.github.io/helm-charts
+  # cert-manager (jetstack)
+  - target: { kind: HelmRepository, name: jetstack, namespace: security }
+    patch: |
+      - op: replace
+        path: /spec/type
+        value: default
+      - op: replace
+        path: /spec/url
+        value: https://charts.jetstack.io
+  # Kyverno
+  - target: { kind: HelmRepository, name: kyverno, namespace: security }
+    patch: |
+      - op: replace
+        path: /spec/type
+        value: default
+      - op: replace
+        path: /spec/url
+        value: https://kyverno.github.io/kyverno/
+  # OneUptime
+  - target: { kind: HelmRepository, name: oneuptime, namespace: incident }
+    patch: |
+      - op: replace
+        path: /spec/type
+        value: default
+      - op: replace
+        path: /spec/url
+        value: https://helm-chart.oneuptime.com/
