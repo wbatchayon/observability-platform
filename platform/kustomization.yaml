@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Kustomization racine de la plateforme : agrège tous les composants.
+# C'est le `path: ./platform` réconcilié par la Kustomization Flux `platform`
+# (kustomize build ./platform puis substitution postBuild.substituteFrom).
+resources:
+  - security
+  - storage
+  - backends
+  - ingestion
+  - visualization
+  - monitoring
+  - incident

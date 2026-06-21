@@ -28,7 +28,8 @@ spec:
       replicaCount: 2          # active/active
       podAntiAffinity: hard
       service:
-        type: LoadBalancer
+        # Portabilité : LoadBalancer (cloud/MetalLB), NodePort ou ClusterIP selon LB_SERVICE_TYPE.
+        type: ${LB_SERVICE_TYPE}
       config:
         # Least-connections + timeouts gRPC + retries.
         balance-algorithm: leastconn
