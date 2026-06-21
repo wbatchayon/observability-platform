@@ -1,29 +1,9 @@
-# Propriétaires par dossier — revue automatique sur les PR.
-# Remplacez les équipes par vos vrais groupes GitHub.
-
-# Par défaut
-*                       @infra-team
-
-# Socle / Terraform
-/bootstrap/             @infra-team @platform-team
-/bootstrap/10-vault/    @security-team
-
-# Plateforme
-/platform/security/     @security-team
-/platform/storage/      @platform-team
-/platform/backends/     @observability-team
-/platform/ingestion/    @observability-team
-/platform/monitoring/   @observability-team
-/platform/visualization/ @observability-team
-/platform/incident/     @sre-team
-
-# Réseau / VMs
-/ingress/               @network-team @platform-team
-/ansible/               @infra-team
-
-# CI/CD et conventions
-/.github/               @platform-team @security-team
-/ci/                    @platform-team
-
-# Documentation
-/docs/                  @observability-team
+# Propriétaire du code : @wbatchayon doit approuver toute modification avant un
+# merge vers main. Il est automatiquement demandé en reviewer sur chaque pull
+# request (sauf celles qu'il ouvre lui-même — GitHub interdit l'auto-revue).
+#
+# NOTE : sur un repo privé en plan gratuit, l'approbation n'est pas *imposée*
+# techniquement (la protection de branche / les rulesets exigent GitHub Pro ou
+# un repo public). Ce fichier garantit la *demande de revue systématique* ;
+# l'autorisation effective des merges reste manuelle.
+* @wbatchayon
