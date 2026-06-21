@@ -1,0 +1,35 @@
+---
+# Relecteur fictif : le bot github-actions approuve automatiquement les PR
+# ouvertes par @wbatchayon depuis une branche de CE dépôt — le seul cas où
+# GitHub interdit l'auto-revue. Pour toutes les autres PR (collaborateurs,
+# bot release-please, forks), @wbatchayon n'est pas l'auteur et peut donc
+# approuver lui-même : elles ne sont volontairement PAS approuvées ici.
+name: Auto-approve (lecteur fictif)
+
+"on":
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: auto-approve-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  approve:
+    name: Approbation automatique des PR de @wbatchayon
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.user.login == 'wbatchayon' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Approuver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr review "${{ github.event.pull_request.number }}" \
+            --approve -R "${{ github.repository }}" \
+            -b "Approbation automatique (relecteur fictif). Le merge reste déclenché manuellement par @wbatchayon."
