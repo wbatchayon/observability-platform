@@ -286,3 +286,98 @@ function parseConfigMapData(yaml: string): Record<string, string> {
   }
   return out;
 }
+
+// --- Patch management : lecture/écriture des versions de charts (env-values) ---
+
+// Lit les versions de charts (*_CHART_VERSION) d'un environnement.
+export async function readChartVersions(
+  octo: Octokit,
+  owner: string,
+  repo: string,
+  environment: string,
+): Promise<Record<string, string>> {
+  const cfg = (await readEnvConfig(octo, owner, repo, environment)) || {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(cfg)) {
+    if (k.endsWith("_CHART_VERSION")) out[k] = v;
+  }
+  return out;
+}
+
+// Met à jour UNIQUEMENT les lignes de version dans env-values.yaml (préserve le reste),
+// puis ouvre/réutilise une PR dédiée. Le déploiement se fait après merge (GitOps) ou via dispatch.
+export async function writeChartVersionsPR(
+  octo: Octokit,
+  owner: string,
+  repo: string,
+  environment: string,
+  versions: Record<string, string>,
+): Promise<{ prUrl: string; branch: string }> {
+  const base = "main";
+  const branch = `gui/versions-${environment}`;
+  const path = `environments/${environment}/env-values.yaml`;
+
+  // Branche dédiée (créée depuis main si absente).
+  try {
+    await octo.git.getRef({ owner, repo, ref: `heads/${branch}` });
+  } catch {
+    const { data: baseRef } = await octo.git.getRef({ owner, repo, ref: `heads/${base}` });
+    await octo.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: baseRef.object.sha });
+  }
+
+  // Contenu courant (branche dédiée sinon main).
+  let sha: string | undefined;
+  let text = "";
+  for (const ref of [branch, base]) {
+    try {
+      const { data } = await octo.repos.getContent({ owner, repo, path, ref });
+      if (!Array.isArray(data) && "content" in data) {
+        text = Buffer.from(data.content, "base64").toString("utf-8");
+        if (ref === branch && "sha" in data) sha = data.sha;
+        if (text) break;
+      }
+    } catch {
+      // ref absente -> suivante
+    }
+  }
+  if (!text) throw new Error(`env-values.yaml introuvable pour l'environnement ${environment}`);
+
+  // Remplacement ciblé ligne à ligne (KEY: "..." conservant l'indentation).
+  for (const [k, v] of Object.entries(versions)) {
+    const re = new RegExp(`(^\\s*${k}:\\s*).*$`, "m");
+    if (re.test(text)) {
+      text = text.replace(re, `$1"${v}"`);
+    } else {
+      // clé absente -> on l'ajoute en fin de section data:
+      text = text.replace(/\n*$/, `\n  ${k}: "${v}"\n`);
+    }
+  }
+
+  const keys = Object.keys(versions).join(", ");
+  await octo.repos.createOrUpdateFileContents({
+    owner,
+    repo,
+    path,
+    branch,
+    message: `chore(gui): montée de version (${environment}) — ${keys}`,
+    content: Buffer.from(text, "utf-8").toString("base64"),
+    sha,
+  });
+
+  const { data: existing } = await octo.pulls.list({
+    owner,
+    repo,
+    state: "open",
+    head: `${owner}:${branch}`,
+  });
+  if (existing.length > 0) return { prUrl: existing[0].html_url, branch };
+  const { data: pr } = await octo.pulls.create({
+    owner,
+    repo,
+    base,
+    head: branch,
+    title: `chore(gui): montée de version des composants (${environment})`,
+    body: "Patch management généré via la console. Merge = déploiement GitOps de la nouvelle version.",
+  });
+  return { prUrl: pr.html_url, branch };
+}

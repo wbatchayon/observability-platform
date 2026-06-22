@@ -19,7 +19,7 @@ spec:
   chart:
     spec:
       chart: oneuptime
-      version: "7.0.0"
+      version: "${ONEUPTIME_CHART_VERSION}"
       sourceRef:
         kind: HelmRepository
         name: oneuptime
