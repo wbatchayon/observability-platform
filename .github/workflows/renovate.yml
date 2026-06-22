@@ -32,14 +32,20 @@ jobs:
   renovate:
     name: Renovate (dependency PRs)
     runs-on: ubuntu-latest
+    # Droits nécessaires à Renovate pour pousser des branches et ouvrir des PR
+    # quand on utilise le GITHUB_TOKEN (cas sans RENOVATE_TOKEN dédié).
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v5
       - name: Self-hosted Renovate
         uses: renovatebot/github-action@v46.1.15
         with:
           configurationFile: .github/renovate.json
-          # PAT (ou token d'app GitHub) avec droits contents+PR. Voir docs/how-it-works.
-          token: ${{ secrets.RENOVATE_TOKEN }}
+          # RENOVATE_TOKEN (PAT ou app GitHub) si défini ; sinon repli sur le GITHUB_TOKEN
+          # du workflow (suffisant pour ce dépôt). Voir docs/how-it-works.
+          token: ${{ secrets.RENOVATE_TOKEN || secrets.GITHUB_TOKEN }}
         env:
           RENOVATE_REPOSITORIES: ${{ github.repository }}
           RENOVATE_PLATFORM: github
