@@ -37,7 +37,7 @@ spec:
   chart:
     spec:
       chart: grafana
-      version: "7.3.11"
+      version: "${GRAFANA_CHART_VERSION}"
       sourceRef:
         kind: HelmRepository
         name: grafana

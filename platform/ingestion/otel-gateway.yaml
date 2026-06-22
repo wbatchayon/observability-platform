@@ -19,7 +19,7 @@ spec:
   chart:
     spec:
       chart: opentelemetry-collector
-      version: "0.93.0"
+      version: "${OTEL_CHART_VERSION}"
       sourceRef:
         kind: HelmRepository
         name: opentelemetry

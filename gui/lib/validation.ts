@@ -101,3 +101,45 @@ export function toEnvValuesYaml(v: EnvValues): string {
     "",
   ].join("\n");
 }
+
+// --- Patch management : versions des charts pilotables depuis la console ---
+// Chaque entrée correspond à une clé *_CHART_VERSION du ConfigMap env-values,
+// substituée par Flux dans le chart.spec.version du HelmRelease correspondant.
+export const chartComponents = [
+  { key: "CERT_MANAGER_CHART_VERSION", label: "cert-manager", ns: "security" },
+  { key: "KYVERNO_CHART_VERSION", label: "Kyverno", ns: "security" },
+  { key: "MINIO_CHART_VERSION", label: "MinIO", ns: "storage" },
+  { key: "LOKI_CHART_VERSION", label: "Loki", ns: "backends" },
+  { key: "MIMIR_CHART_VERSION", label: "Mimir", ns: "backends" },
+  { key: "TEMPO_CHART_VERSION", label: "Tempo", ns: "backends" },
+  { key: "OTEL_CHART_VERSION", label: "OpenTelemetry Collector", ns: "ingestion" },
+  { key: "KUBE_PROM_STACK_CHART_VERSION", label: "kube-prometheus-stack", ns: "monitoring" },
+  { key: "GRAFANA_CHART_VERSION", label: "Grafana", ns: "visualization" },
+  { key: "ONEUPTIME_CHART_VERSION", label: "OneUptime", ns: "incident" },
+] as const;
+
+export type ChartComponentKey = (typeof chartComponents)[number]["key"];
+const chartKeys = chartComponents.map((c) => c.key);
+
+// Une version de chart : SemVer simple (avec préfixe v optionnel, ex. v1.14.4 / 6.6.2).
+const versionRe = /^v?\d+\.\d+(\.\d+)?([-.][0-9A-Za-z.-]+)?$/;
+
+// Valide un lot {KEY: version} : seules les clés connues, versions au bon format.
+export function validateChartVersions(input: Record<string, string>): {
+  ok: boolean;
+  values: Record<string, string>;
+  errors: string[];
+} {
+  const values: Record<string, string> = {};
+  const errors: string[] = [];
+  for (const [k, v] of Object.entries(input || {})) {
+    if (!chartKeys.includes(k as ChartComponentKey)) continue; // ignore clés inconnues
+    const val = String(v).trim();
+    if (!versionRe.test(val)) {
+      errors.push(`${k}: version invalide "${val}"`);
+      continue;
+    }
+    values[k] = val;
+  }
+  return { ok: errors.length === 0, values, errors };
+}
