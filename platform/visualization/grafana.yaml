@@ -72,8 +72,32 @@ spec:
         auth_url: ${GRAFANA_OAUTH_AUTH_URL}
         token_url: ${GRAFANA_OAUTH_TOKEN_URL}
         api_url: ${GRAFANA_OAUTH_API_URL}
+      # Alerting unifié activé : Grafana remonte ses alertes vers l'Alertmanager central.
+      unified_alerting:
+        enabled: true
+      alerting:
+        enabled: false
     extraSecretMounts:
       - name: grafana-tls
         secretName: grafana-tls
         mountPath: /etc/grafana/tls
         readOnly: true
+    # Alerting Grafana provisionné : route les alertes vers l'Alertmanager central
+    # (point unique de l'architecture, cf. docs/imgs/architecture.mmd), qui remonte
+    # ensuite vers OneUptime. Le contact point cible l'Alertmanager de kube-prometheus-stack.
+    alerting:
+      contactpoints.yaml:
+        apiVersion: 1
+        contactPoints:
+          - orgId: 1
+            name: alertmanager-central
+            receivers:
+              - uid: alertmanager_central
+                type: prometheus-alertmanager
+                settings:
+                  url: http://kube-prometheus-stack-alertmanager.monitoring.svc.cluster.local:9093
+      policies.yaml:
+        apiVersion: 1
+        policies:
+          - orgId: 1
+            receiver: alertmanager-central
