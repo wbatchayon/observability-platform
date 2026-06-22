@@ -143,3 +143,85 @@ export function validateChartVersions(input: Record<string, string>): {
   }
   return { ok: errors.length === 0, values, errors };
 }
+
+// --- Credentials unifiés : tout ce que l'utilisateur saisit, posé en secrets ---
+// Chaque champ est écrit comme secret du GitHub Environment (sealed box), consommé
+// par les workflows (Terraform/Ansible/déploiement) — jamais en clair.
+export type CredField = { key: string; label: string; multiline?: boolean; placeholder?: string };
+export type CredGroup = { id: string; title: string; fields: CredField[] };
+
+export const credentialGroups: CredGroup[] = [
+  {
+    id: "cloud",
+    title: "Infrastructure / Cloud (providers Terraform)",
+    fields: [
+      { key: "PROXMOX_VE_API_TOKEN", label: "Proxmox API token", placeholder: "user@pam!id=uuid" },
+      { key: "AWS_ACCESS_KEY_ID", label: "AWS Access Key ID" },
+      { key: "AWS_SECRET_ACCESS_KEY", label: "AWS Secret Access Key" },
+      { key: "GOOGLE_CREDENTIALS", label: "GCP Service Account (JSON)", multiline: true },
+      { key: "ARM_CLIENT_ID", label: "Azure Client ID" },
+      { key: "ARM_CLIENT_SECRET", label: "Azure Client Secret" },
+      { key: "ARM_SUBSCRIPTION_ID", label: "Azure Subscription ID" },
+      { key: "ARM_TENANT_ID", label: "Azure Tenant ID" },
+    ],
+  },
+  {
+    id: "ansible",
+    title: "Ansible (configuration des VMs air-gap)",
+    fields: [
+      { key: "ANSIBLE_SSH_PRIVATE_KEY", label: "Clé SSH privée", multiline: true },
+      { key: "ANSIBLE_VAULT_PASSWORD", label: "Mot de passe Ansible Vault" },
+    ],
+  },
+  {
+    id: "core",
+    title: "Vault & Registre",
+    fields: [
+      { key: "VAULT_TOKEN", label: "Vault token (bootstrap)" },
+      { key: "HARBOR_USERNAME", label: "Harbor — utilisateur/robot" },
+      { key: "HARBOR_PASSWORD", label: "Harbor — mot de passe/jeton" },
+    ],
+  },
+  {
+    id: "platform",
+    title: "Plateforme (env-secrets)",
+    fields: [
+      { key: "MINIO_ACCESS_KEY", label: "MinIO Access Key" },
+      { key: "MINIO_SECRET_KEY", label: "MinIO Secret Key" },
+      { key: "GRAFANA_ADMIN_PASSWORD", label: "Grafana — mot de passe admin" },
+      { key: "GLPI_DB_PASSWORD", label: "GLPI — mot de passe BD" },
+      { key: "GLPI_DB_ROOT_PASSWORD", label: "GLPI — mot de passe BD root" },
+    ],
+  },
+  {
+    id: "notif",
+    title: "Authentification & Notifications",
+    fields: [
+      { key: "GRAFANA_OAUTH_CLIENT_SECRET", label: "Grafana OAuth — client secret" },
+      { key: "SLACK_WEBHOOK_URL", label: "Slack — webhook" },
+      { key: "TEAMS_WEBHOOK_URL", label: "Teams — webhook" },
+      { key: "SMTP_PASSWORD", label: "SMTP — mot de passe" },
+    ],
+  },
+];
+
+const credKeys = credentialGroups.flatMap((g) => g.fields.map((f) => f.key));
+
+// Valide un lot de credentials : environment + clés connues uniquement (toutes facultatives).
+export function validateCredentials(environment: string, input: Record<string, unknown>): {
+  ok: boolean;
+  environment: string;
+  values: Record<string, string>;
+  error?: string;
+} {
+  if (!["dev", "staging", "prod"].includes(environment)) {
+    return { ok: false, environment, values: {}, error: "Environnement invalide" };
+  }
+  const values: Record<string, string> = {};
+  for (const [k, v] of Object.entries(input || {})) {
+    if (!credKeys.includes(k)) continue;
+    const val = typeof v === "string" ? v.trim() : "";
+    if (val) values[k] = val;
+  }
+  return { ok: true, environment, values };
+}

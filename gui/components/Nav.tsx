@@ -18,6 +18,7 @@ export function Nav() {
     { href: "/pipelines", label: t("nav.pipelines") },
     { href: "/runs", label: t("nav.runs") },
     { href: "/patch-management", label: t("nav.patch") },
+    { href: "/credentials", label: t("nav.credentials") },
     { href: "/tools", label: t("nav.tools") },
   ];
 

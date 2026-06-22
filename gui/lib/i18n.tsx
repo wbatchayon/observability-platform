@@ -13,6 +13,7 @@ const fr: Dict = {
   "nav.runs": "Suivi",
   "nav.tools": "Outils",
   "nav.patch": "Patch management",
+  "nav.credentials": "Credentials",
   "nav.account": "Compte",
 
   "dash.title": "Console de management",
@@ -101,6 +102,7 @@ const en: Dict = {
   "nav.runs": "Runs",
   "nav.tools": "Tools",
   "nav.patch": "Patch management",
+  "nav.credentials": "Credentials",
   "nav.account": "Account",
 
   "dash.title": "Management console",
