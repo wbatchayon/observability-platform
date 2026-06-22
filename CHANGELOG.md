@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.4](https://github.com/wbatchayon/observability-platform/compare/v0.1.3...v0.1.4) (2026-06-22)
+
+
+### 🚀 Fonctionnalités
+
+* alerting Grafana vers Alertmanager central + correction du schéma d'architecture et du README ([#38](https://github.com/wbatchayon/observability-platform/issues/38)) ([9fbebc0](https://github.com/wbatchayon/observability-platform/commit/9fbebc0d2779809a978427e9966a23183d3095cd))
+
+
+### 🐛 Corrections
+
+* Renovate utilise le GITHUB_TOKEN par défaut (repli si RENOVATE_TOKEN absent) ([#36](https://github.com/wbatchayon/observability-platform/issues/36)) ([a16b45a](https://github.com/wbatchayon/observability-platform/commit/a16b45afc8e3041bdff2aa92d7952dade3da2fbc))
+
 ## [0.1.3](https://github.com/wbatchayon/observability-platform/compare/v0.1.2...v0.1.3) (2026-06-22)
 
 
