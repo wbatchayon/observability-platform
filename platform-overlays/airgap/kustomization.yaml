@@ -1,0 +1,7 @@
+---
+# Overlay air-gap (mode par défaut explicite) : reprend la base telle quelle.
+# Les HelmRepository pointent vers Harbor OCI (oci://${HARBOR_REGISTRY}/charts).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../platform

@@ -25,3 +25,18 @@ policy-as-code, RBAC.
 
 cert-manager + le `ClusterIssuer` doivent être prêts **avant** les briques qui demandent des
 certificats. Flux gère cela via les `dependsOn` des Kustomizations d'environnement.
+
+## Désactiver les NetworkPolicies (NETWORK_POLICIES_ENABLED)
+
+La variable `NETWORK_POLICIES_ENABLED` (env-values) est **documentaire** : kustomize ne peut
+pas supprimer conditionnellement une ressource à partir d'une variable substituée par Flux.
+
+Sur un cluster sans CNI gérant l'API NetworkPolicy (ou si l'on souhaite s'en passer
+temporairement), deux options :
+
+1. **Commenter les ressources** (le plus simple) - dans `platform/security/kustomization.yaml`,
+   mettez en commentaire les 5 lignes `network-policies/*` du bloc dédié.
+2. **Overlay/Component dédié** - voir `platform-overlays/` pour l'approche par overlay
+   (le composant `platform-overlays/openshift/` et les overlays air-gap/internet montrent le
+   patron). Un composant `disable-network-policies` peut retirer ces ressources via
+   `patches` de type `$patch: delete` si vous préférez un overlay versionné.
