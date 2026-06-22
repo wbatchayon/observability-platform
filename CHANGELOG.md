@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.1.3](https://github.com/wbatchayon/observability-platform/compare/v0.1.2...v0.1.3) (2026-06-22)
+
+
+### 🚀 Fonctionnalités
+
+* déploiement universel multi-cloud et console de management complète ([#34](https://github.com/wbatchayon/observability-platform/issues/34)) ([63a7712](https://github.com/wbatchayon/observability-platform/commit/63a771238f8e9547a7b808b58e86a89c10405aed))
+* **gui:** design responsive (mobile/tablette) ([47b12ea](https://github.com/wbatchayon/observability-platform/commit/47b12ea0289e89b49dd69b34750e6217fbcd6829))
+* **gui:** internationalisation FR/EN ([b460bd1](https://github.com/wbatchayon/observability-platform/commit/b460bd1e9536302a263a34c1f9910d11e60cbe32))
+* **gui:** internationalisation FR/EN (sélecteur de langue, détection navigateur, persistance) ([376d9fc](https://github.com/wbatchayon/observability-platform/commit/376d9fc02ae1a4ddf528b214aef32a976e104ae0))
+* **gui:** responsive (menu hamburger mobile, tableau scrollable, mises en page adaptatives) ([6fb5fa7](https://github.com/wbatchayon/observability-platform/commit/6fb5fa79fbca18026b275798869f4fc65377191d))
+
+
+### 🐛 Corrections
+
+* déployabilité multi-cluster, ordonnancement Flux, doc ressources et fichiers open-source ([#29](https://github.com/wbatchayon/observability-platform/issues/29)) ([99cdc76](https://github.com/wbatchayon/observability-platform/commit/99cdc76bf4a5e4c01f94b13d7b15cdf91aa4728c))
+* **security:** NetworkPolicies deny-by-default pour incident + Kyverno verify-images en Audit (images non signées) ([44f6b98](https://github.com/wbatchayon/observability-platform/commit/44f6b98be1fdc0bdc36b2bdcd1480e607cf68e69))
+* **security:** remédiations de la revue de sécurité ([877b243](https://github.com/wbatchayon/observability-platform/commit/877b243533890192741ea66147edf2161342e32d))
+
+
+### 📚 Documentation
+
+* présentation (PPT) et documentation (DOC) du projet ([0d1dbb3](https://github.com/wbatchayon/observability-platform/commit/0d1dbb390ab5878f06d1069c0051339bc449be0e))
+* présentation PowerPoint et document Word du projet (+ schémas et captures) ([f78b2b8](https://github.com/wbatchayon/observability-platform/commit/f78b2b8eca445db7333f6b6020fee96d8aed810a))
+
+
+### 🔧 CI/CD
+
+* relecteur fictif (auto-approbation des PR de [@wbatchayon](https://github.com/wbatchayon)) ([#27](https://github.com/wbatchayon/observability-platform/issues/27)) ([cc0ca89](https://github.com/wbatchayon/observability-platform/commit/cc0ca896fd11e55864d6b99d7512d13d95167fc5))
+
 ## [0.1.2](https://github.com/wbatchayon/observability-platform/compare/v0.1.1...v0.1.2) (2026-06-20)
 
 
