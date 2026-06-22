@@ -8,11 +8,10 @@ name: CI
   push:
     branches: [main]
 
+# Moindre privilège : lecture seule par défaut ; les jobs qui en ont besoin
+# l'élèvent localement (iac-plan -> commentaire PR, supply-chain -> OIDC cosign).
 permissions:
   contents: read
-  pull-requests: write
-  security-events: write
-  id-token: write
 
 jobs:
   # ── Étage 1 : vérifications rapides ─────────────────────────────
@@ -38,7 +37,8 @@ jobs:
             (cd "$d" && tflint --init && tflint)
           done
       - name: ansible-lint
-        uses: ansible/ansible-lint@main
+        # Épinglé au digest (mutabilité de @main) ; Renovate met à jour via pinGitHubActionDigests.
+        uses: ansible/ansible-lint@c593980dcda6205ac332e184de244ad71618ac30 # main
         with:
           args: "ansible/"
 
@@ -124,6 +124,9 @@ jobs:
     name: Terraform plan + Flux diff (commentaire PR)
     runs-on: ubuntu-latest
     needs: [validate]
+    permissions:
+      contents: read
+      pull-requests: write
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v5
@@ -149,6 +152,9 @@ jobs:
     name: SBOM + signature (syft / cosign)
     runs-on: ubuntu-latest
     needs: [security, policy]
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v5
       - name: Génération SBOM (syft)

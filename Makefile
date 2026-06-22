@@ -27,7 +27,7 @@ check-env: ## Vérifie que environments/$(ENV) existe
 	@echo "✅ Environnement : $(ENV)"
 
 .PHONY: bootstrap
-bootstrap: check-env ## Provisionne le socle (cluster -> Vault -> Flux -> dépôt packages)
+bootstrap: check-env ## Provisionne le socle (cluster -> Harbor -> Vault -> Flux)
 	@for d in $(BOOTSTRAP_DIRS); do \
 		echo "==> terraform apply $$d ($(ENV))"; \
 		terraform -chdir=$$d init -input=false; \
@@ -39,6 +39,10 @@ bootstrap: check-env ## Provisionne le socle (cluster -> Vault -> Flux -> dépô
 deploy: check-env ## Réconcilie la plateforme via FluxCD
 	@echo "==> Flux reconcile ($(ENV))"
 	flux reconcile kustomization platform --with-source
+
+.PHONY: preflight
+preflight: ## Vérifie les prérequis du cluster cible (SC, LB, version K8s, CNI)
+	@bash ci/preflight.sh
 
 .PHONY: validate
 validate: ## Valide tout le repo (lint + kubeconform + terraform validate)
