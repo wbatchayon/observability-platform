@@ -9,6 +9,13 @@ data:
   TENANT_ID: "observability"
   VAULT_ADDR: "https://vault.vault.svc.cluster.local:8200"
   HARBOR_REGISTRY: "harbor.observability.internal"
+  # Portabilité (voir environments/_template/env-values.yaml pour le détail).
+  STORAGE_CLASS: "local-path"
+  LB_SERVICE_TYPE: "LoadBalancer"
+  NETWORK_POLICIES_ENABLED: "true"
+  # CHART_SOURCE : airgap (charts depuis Harbor OCI) ou internet (dépôts Helm publics).
+  # Sélectionne l'overlay platform-overlays/<valeur> côté Flux (path de la Kustomization).
+  CHART_SOURCE: "airgap"
   MINIO_REPLICAS: "4"
   MINIO_VOLUME_SIZE: "50Gi"
   LOKI_RETENTION: "168h"
@@ -29,3 +36,17 @@ data:
   GRAFANA_OAUTH_API_URL: "https://sso.example.com/userinfo"
   GRAFANA_ADMIN_USER: "admin"
   OTLP_DOMAIN: "otlp.dev.observability.internal"
+
+  # --- Patch management (versions des charts) ---
+  # Montée de version : changez le numéro puis lancez le déploiement (console GUI
+  # « Patch management » ou `make deploy`). Renovate propose les versions stables.
+  CERT_MANAGER_CHART_VERSION: "v1.14.4"
+  KYVERNO_CHART_VERSION: "3.2.1"
+  MINIO_CHART_VERSION: "5.2.0"
+  LOKI_CHART_VERSION: "6.6.2"
+  MIMIR_CHART_VERSION: "5.4.0"
+  TEMPO_CHART_VERSION: "1.10.1"
+  OTEL_CHART_VERSION: "0.93.0"
+  KUBE_PROM_STACK_CHART_VERSION: "59.1.0"
+  GRAFANA_CHART_VERSION: "7.3.11"
+  ONEUPTIME_CHART_VERSION: "7.0.0"

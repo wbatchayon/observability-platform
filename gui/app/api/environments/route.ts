@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, getSession } from "@/lib/session";
-import { githubClient, targetRepo, writeEnvConfigPR } from "@/lib/github";
-import { envValuesSchema, toEnvValuesYaml } from "@/lib/validation";
+import { githubClient, targetRepo, writeEnvValuesMergePR } from "@/lib/github";
+import { envValuesSchema, envValuesRecord } from "@/lib/validation";
 import { serverError } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -27,8 +27,14 @@ export async function POST(req: NextRequest) {
     const { owner, repo } = targetRepo();
     const session = await getSession();
     const octo = githubClient(session.ghToken);
-    const yaml = toEnvValuesYaml(parsed.data);
-    const { prUrl, branch } = await writeEnvConfigPR(octo, owner, repo, parsed.data.environment, yaml);
+    const env = parsed.data.environment;
+    const values = envValuesRecord(parsed.data);
+    const { prUrl, branch } = await writeEnvValuesMergePR(octo, owner, repo, env, values, {
+      branch: `gui/config-${env}`,
+      title: `chore(gui): configuration de l'environnement ${env}`,
+      message: `chore(gui): configuration de l'environnement ${env}`,
+      body: "Configuration générée via la console (fusion en place, sans modification du code).",
+    });
     return NextResponse.json({ ok: true, prUrl, branch });
   } catch (e) {
     return serverError("environments", e);

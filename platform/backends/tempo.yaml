@@ -12,7 +12,7 @@ spec:
   chart:
     spec:
       chart: tempo-distributed
-      version: "1.10.1"
+      version: "${TEMPO_CHART_VERSION}"
       sourceRef:
         kind: HelmRepository
         name: grafana

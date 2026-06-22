@@ -14,6 +14,24 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    # Providers cloud transmis aux modules eks/gke/aks/talos selon cluster_provider.
+    # Configurés sans credentials (providers.tf) : terraform validate passe hors ligne.
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+    talos = {
+      source  = "siderolabs/talos"
+      version = "~> 0.6"
+    }
   }
 
   # Backend distant recommandé (décommenter et adapter par environnement) :

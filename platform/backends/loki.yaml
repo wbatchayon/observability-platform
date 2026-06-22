@@ -23,7 +23,7 @@ spec:
   chart:
     spec:
       chart: loki
-      version: "6.6.2"
+      version: "${LOKI_CHART_VERSION}"
       sourceRef:
         kind: HelmRepository
         name: grafana
