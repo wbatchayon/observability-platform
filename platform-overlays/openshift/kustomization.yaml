@@ -1,0 +1,25 @@
+---
+# Overlay OpenShift : retire les UID/GID codés en dur des manifests gérés
+# directement (GLPI/MariaDB), incompatibles avec les SecurityContextConstraints
+# (restricted-v2 assigne une plage d'UID/GID par namespace).
+# Les composants déployés par Helm (Loki/Mimir/Tempo/MinIO/Grafana...) se
+# configurent via leurs values si nécessaire.
+# Build : kustomize build platform-overlays/openshift/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../platform
+
+patches:
+  - target: { kind: StatefulSet, name: glpi-mariadb, namespace: incident }
+    patch: |
+      - op: remove
+        path: /spec/template/spec/securityContext/runAsUser
+      - op: remove
+        path: /spec/template/spec/securityContext/fsGroup
+  - target: { kind: Deployment, name: glpi, namespace: incident }
+    patch: |
+      - op: remove
+        path: /spec/template/spec/securityContext/runAsUser
+      - op: remove
+        path: /spec/template/spec/securityContext/fsGroup

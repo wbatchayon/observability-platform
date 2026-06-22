@@ -1,6 +1,6 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-# Plateforme d'Observabilité — Reproductible, Sécurisée, GitOps
+# Plateforme d'Observabilité reproductible, sécurisée et GitOps
 
 > 100% open source · stack Grafana (Loki / Mimir / Tempo / Grafana) · OpenTelemetry · FluxCD · DevSecOps
 
@@ -95,4 +95,4 @@ Toute PR vers `main` passe par la CI et l'approbation du [CODEOWNERS](.github/CO
 
 ---
 
-*Auteur : William BATCHAYON - Architecte Technique*
+*Auteur : William BATCHAYON, Architecte Technique*

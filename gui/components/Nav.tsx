@@ -17,6 +17,8 @@ export function Nav() {
     { href: "/environments", label: t("nav.config") },
     { href: "/pipelines", label: t("nav.pipelines") },
     { href: "/runs", label: t("nav.runs") },
+    { href: "/patch-management", label: t("nav.patch") },
+    { href: "/credentials", label: t("nav.credentials") },
     { href: "/tools", label: t("nav.tools") },
   ];
 

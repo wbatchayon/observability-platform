@@ -28,3 +28,6 @@ ansible/inventories/**/host_vars/**/vault.local
 dist/
 *.sbom.json
 *.tmp
+
+# État local des outils / worktrees d'agents
+.claude/
