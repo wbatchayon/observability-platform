@@ -36,7 +36,7 @@ export default function PipelinesPage() {
   const [provider, setProvider] = useState<string>("kubeadm");
   const [storageClass, setStorageClass] = useState("standard");
   const [lbType, setLbType] = useState<string>("LoadBalancer");
-  const [chartSource, setChartSource] = useState<string>("upstream");
+  const [chartSource, setChartSource] = useState<string>("airgap");
   const [netpol, setNetpol] = useState<string>("true");
   const [cfgMsg, setCfgMsg] = useState<string | null>(null);
 

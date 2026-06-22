@@ -34,6 +34,9 @@ data:
   # les NetworkPolicies, commentez les lignes network-policies/* dans
   # platform/security/kustomization.yaml (voir platform/security/README.md).
   NETWORK_POLICIES_ENABLED: "true"
+  # CHART_SOURCE : airgap (charts depuis Harbor OCI) ou internet (dépôts Helm publics).
+  # Sélectionne l'overlay platform-overlays/<valeur> côté Flux (path de la Kustomization).
+  CHART_SOURCE: "airgap"
 
   # --- Stockage (MinIO) ---
   MINIO_REPLICAS: "4"

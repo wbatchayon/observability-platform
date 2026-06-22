@@ -7,15 +7,16 @@ export type ClusterProvider = (typeof clusterProviders)[number];
 // Types de Service exposant le load balancer (portabilité réseau).
 export const lbServiceTypes = ["LoadBalancer", "NodePort", "ClusterIP"] as const;
 
-// Source des charts (Internet vs registre OCI interne pour les environnements isolés).
-export const chartSources = ["upstream", "harbor"] as const;
+// Source des charts, alignée sur les overlays platform-overlays/ :
+//   airgap = registre OCI interne (Harbor) ; internet = dépôts Helm publics.
+export const chartSources = ["airgap", "internet"] as const;
 
-// Knobs de portabilité — valeurs optionnelles avec défauts sûrs (alignés sur tfvars/env-values).
+// Knobs de portabilité : valeurs optionnelles avec défauts sûrs (alignés sur tfvars/env-values).
 export const portabilitySchema = z.object({
   CLUSTER_PROVIDER: z.enum(clusterProviders).default("kubeadm"),
   STORAGE_CLASS: z.string().min(1).default("standard"),
   LB_SERVICE_TYPE: z.enum(lbServiceTypes).default("LoadBalancer"),
-  CHART_SOURCE: z.enum(chartSources).default("upstream"),
+  CHART_SOURCE: z.enum(chartSources).default("airgap"),
   NETWORK_POLICIES_ENABLED: z.enum(["true", "false"]).default("true"),
 });
 
@@ -65,9 +66,10 @@ export const dispatchSchema = z.object({
   environment: z.enum(["dev", "staging", "prod"]),
 });
 
-// Génère le YAML du ConfigMap env-values à partir des valeurs validées.
-export function toEnvValuesYaml(v: EnvValues): string {
-  const data: Record<string, string> = {
+// Retourne les paires clé/valeur gérées par le formulaire (pour une fusion en place
+// qui préserve les clés non gérées et les commentaires du fichier).
+export function envValuesRecord(v: EnvValues): Record<string, string> {
+  return {
     ENVIRONMENT: v.environment,
     TENANT_ID: v.TENANT_ID,
     VAULT_ADDR: v.VAULT_ADDR,
@@ -81,13 +83,17 @@ export function toEnvValuesYaml(v: EnvValues): string {
     TRACE_SAMPLING_PERCENT: String(v.TRACE_SAMPLING_PERCENT),
     GRAFANA_DOMAIN: v.GRAFANA_DOMAIN,
     OTLP_DOMAIN: v.OTLP_DOMAIN,
-    // Knobs de portabilité (cluster + réseau + stockage + source des charts).
     CLUSTER_PROVIDER: v.CLUSTER_PROVIDER,
     STORAGE_CLASS: v.STORAGE_CLASS,
     LB_SERVICE_TYPE: v.LB_SERVICE_TYPE,
     CHART_SOURCE: v.CHART_SOURCE,
     NETWORK_POLICIES_ENABLED: v.NETWORK_POLICIES_ENABLED,
   };
+}
+
+// Génère le YAML complet du ConfigMap env-values (création initiale d'un environnement).
+export function toEnvValuesYaml(v: EnvValues): string {
+  const data = envValuesRecord(v);
   const lines = Object.entries(data).map(([k, val]) => `  ${k}: ${JSON.stringify(val)}`);
   return [
     "---",
@@ -121,8 +127,8 @@ export const chartComponents = [
 export type ChartComponentKey = (typeof chartComponents)[number]["key"];
 const chartKeys = chartComponents.map((c) => c.key);
 
-// Une version de chart : SemVer simple (avec préfixe v optionnel, ex. v1.14.4 / 6.6.2).
-const versionRe = /^v?\d+\.\d+(\.\d+)?([-.][0-9A-Za-z.-]+)?$/;
+// Une version de chart : SemVer complet (préfixe v optionnel, ex. v1.14.4 / 6.6.2).
+const versionRe = /^v?\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$/;
 
 // Valide un lot {KEY: version} : seules les clés connues, versions au bon format.
 export function validateChartVersions(input: Record<string, string>): {
@@ -146,7 +152,7 @@ export function validateChartVersions(input: Record<string, string>): {
 
 // --- Credentials unifiés : tout ce que l'utilisateur saisit, posé en secrets ---
 // Chaque champ est écrit comme secret du GitHub Environment (sealed box), consommé
-// par les workflows (Terraform/Ansible/déploiement) — jamais en clair.
+// par les workflows (Terraform/Ansible/déploiement) : jamais en clair.
 export type CredField = { key: string; label: string; multiline?: boolean; placeholder?: string };
 export type CredGroup = { id: string; title: string; fields: CredField[] };
 
@@ -178,8 +184,8 @@ export const credentialGroups: CredGroup[] = [
     title: "Vault & Registre",
     fields: [
       { key: "VAULT_TOKEN", label: "Vault token (bootstrap)" },
-      { key: "HARBOR_USERNAME", label: "Harbor — utilisateur/robot" },
-      { key: "HARBOR_PASSWORD", label: "Harbor — mot de passe/jeton" },
+      { key: "HARBOR_USERNAME", label: "Harbor : utilisateur/robot" },
+      { key: "HARBOR_PASSWORD", label: "Harbor : mot de passe/jeton" },
     ],
   },
   {
@@ -188,19 +194,19 @@ export const credentialGroups: CredGroup[] = [
     fields: [
       { key: "MINIO_ACCESS_KEY", label: "MinIO Access Key" },
       { key: "MINIO_SECRET_KEY", label: "MinIO Secret Key" },
-      { key: "GRAFANA_ADMIN_PASSWORD", label: "Grafana — mot de passe admin" },
-      { key: "GLPI_DB_PASSWORD", label: "GLPI — mot de passe BD" },
-      { key: "GLPI_DB_ROOT_PASSWORD", label: "GLPI — mot de passe BD root" },
+      { key: "GRAFANA_ADMIN_PASSWORD", label: "Grafana : mot de passe admin" },
+      { key: "GLPI_DB_PASSWORD", label: "GLPI : mot de passe BD" },
+      { key: "GLPI_DB_ROOT_PASSWORD", label: "GLPI : mot de passe BD root" },
     ],
   },
   {
     id: "notif",
     title: "Authentification & Notifications",
     fields: [
-      { key: "GRAFANA_OAUTH_CLIENT_SECRET", label: "Grafana OAuth — client secret" },
-      { key: "SLACK_WEBHOOK_URL", label: "Slack — webhook" },
-      { key: "TEAMS_WEBHOOK_URL", label: "Teams — webhook" },
-      { key: "SMTP_PASSWORD", label: "SMTP — mot de passe" },
+      { key: "GRAFANA_OAUTH_CLIENT_SECRET", label: "Grafana OAuth : client secret" },
+      { key: "SLACK_WEBHOOK_URL", label: "Slack : webhook" },
+      { key: "TEAMS_WEBHOOK_URL", label: "Teams : webhook" },
+      { key: "SMTP_PASSWORD", label: "SMTP : mot de passe" },
     ],
   },
 ];

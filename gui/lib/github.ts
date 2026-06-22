@@ -304,20 +304,50 @@ export async function readChartVersions(
   return out;
 }
 
-// Met à jour UNIQUEMENT les lignes de version dans env-values.yaml (préserve le reste),
-// puis ouvre/réutilise une PR dédiée. Le déploiement se fait après merge (GitOps) ou via dispatch.
-export async function writeChartVersionsPR(
+// Fusionne des paires clé/valeur dans la section data: d'un ConfigMap, EN PLACE :
+// remplace les clés existantes (en conservant indentation et commentaires) et insère
+// les clés absentes à la fin de la section data: (jamais en fin de fichier).
+function mergeConfigMapData(text: string, values: Record<string, string>): string {
+  const lines = text.split("\n");
+  const dataIdx = lines.findIndex((l) => /^data:\s*$/.test(l));
+  // Fin de la section data: = première ligne non vide et non indentée après data:.
+  let endIdx = lines.length;
+  if (dataIdx !== -1) {
+    endIdx = dataIdx + 1;
+    while (endIdx < lines.length && (lines[endIdx] === "" || /^\s/.test(lines[endIdx]))) endIdx++;
+  }
+  const toInsert: string[] = [];
+  for (const [k, v] of Object.entries(values)) {
+    const re = new RegExp(`^(\\s*)${k}:\\s*.*$`);
+    let replaced = false;
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(re);
+      if (m) {
+        lines[i] = `${m[1]}${k}: ${JSON.stringify(v)}`;
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) toInsert.push(`  ${k}: ${JSON.stringify(v)}`);
+  }
+  if (toInsert.length) lines.splice(endIdx, 0, ...toInsert);
+  return lines.join("\n");
+}
+
+// Écrit des valeurs dans env-values.yaml par fusion EN PLACE (préserve les clés non
+// gérées et les commentaires), sur une branche dédiée, puis ouvre/réutilise une PR.
+export async function writeEnvValuesMergePR(
   octo: Octokit,
   owner: string,
   repo: string,
   environment: string,
-  versions: Record<string, string>,
+  values: Record<string, string>,
+  opts: { branch: string; title: string; message: string; body: string },
 ): Promise<{ prUrl: string; branch: string }> {
   const base = "main";
-  const branch = `gui/versions-${environment}`;
+  const branch = opts.branch;
   const path = `environments/${environment}/env-values.yaml`;
 
-  // Branche dédiée (créée depuis main si absente).
   try {
     await octo.git.getRef({ owner, repo, ref: `heads/${branch}` });
   } catch {
@@ -325,7 +355,6 @@ export async function writeChartVersionsPR(
     await octo.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: baseRef.object.sha });
   }
 
-  // Contenu courant (branche dédiée sinon main).
   let sha: string | undefined;
   let text = "";
   for (const ref of [branch, base]) {
@@ -337,30 +366,19 @@ export async function writeChartVersionsPR(
         if (text) break;
       }
     } catch {
-      // ref absente -> suivante
+      // ref absente, on tente la suivante
     }
   }
   if (!text) throw new Error(`env-values.yaml introuvable pour l'environnement ${environment}`);
 
-  // Remplacement ciblé ligne à ligne (KEY: "..." conservant l'indentation).
-  for (const [k, v] of Object.entries(versions)) {
-    const re = new RegExp(`(^\\s*${k}:\\s*).*$`, "m");
-    if (re.test(text)) {
-      text = text.replace(re, `$1"${v}"`);
-    } else {
-      // clé absente -> on l'ajoute en fin de section data:
-      text = text.replace(/\n*$/, `\n  ${k}: "${v}"\n`);
-    }
-  }
-
-  const keys = Object.keys(versions).join(", ");
+  const merged = mergeConfigMapData(text, values);
   await octo.repos.createOrUpdateFileContents({
     owner,
     repo,
     path,
     branch,
-    message: `chore(gui): montée de version (${environment}) — ${keys}`,
-    content: Buffer.from(text, "utf-8").toString("base64"),
+    message: opts.message,
+    content: Buffer.from(merged, "utf-8").toString("base64"),
     sha,
   });
 
@@ -376,8 +394,24 @@ export async function writeChartVersionsPR(
     repo,
     base,
     head: branch,
-    title: `chore(gui): montée de version des composants (${environment})`,
-    body: "Patch management généré via la console. Merge = déploiement GitOps de la nouvelle version.",
+    title: opts.title,
+    body: opts.body,
   });
   return { prUrl: pr.html_url, branch };
+}
+
+// Montée de version des composants (patch management) : fusion en place des clés *_CHART_VERSION.
+export async function writeChartVersionsPR(
+  octo: Octokit,
+  owner: string,
+  repo: string,
+  environment: string,
+  versions: Record<string, string>,
+): Promise<{ prUrl: string; branch: string }> {
+  return writeEnvValuesMergePR(octo, owner, repo, environment, versions, {
+    branch: `gui/versions-${environment}`,
+    title: `chore(gui): montée de version des composants (${environment})`,
+    message: `chore(gui): montée de version des composants (${environment})`,
+    body: "Patch management généré via la console. Le merge déploie la nouvelle version (GitOps).",
+  });
 }

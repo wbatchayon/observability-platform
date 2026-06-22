@@ -9,7 +9,7 @@ import {
   dispatchWorkflow,
 } from "@/lib/github";
 import { chartComponents, validateChartVersions } from "@/lib/validation";
-import { serverError } from "@/lib/http";
+import { serverError, isConfigError, configError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
@@ -19,7 +19,8 @@ const ENVS = ["dev", "staging", "prod"];
 export async function GET(req: NextRequest) {
   try {
     await requireUser();
-  } catch {
+  } catch (e) {
+    if (isConfigError(e)) return configError(e);
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
   const environment = req.nextUrl.searchParams.get("environment") || "dev";
@@ -48,7 +49,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     await requireUser();
-  } catch {
+  } catch (e) {
+    if (isConfigError(e)) return configError(e);
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
   const body = await req.json().catch(() => ({}));

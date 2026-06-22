@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Réconcilié par la Kustomization flux-system créée au bootstrap (path clusters/<env>).
+resources:
+  - platform.yaml
+  - ../../bootstrap/20-flux/image-automation.yaml
+  - ../../bootstrap/20-flux/notification.yaml

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser, getSession } from "@/lib/session";
 import { githubClient, targetRepo, setEnvironmentSecret } from "@/lib/github";
 import { validateCredentials } from "@/lib/validation";
-import { serverError } from "@/lib/http";
+import { serverError, isConfigError, configError } from "@/lib/http";
 
 export const runtime = "nodejs";
 
@@ -12,7 +12,8 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {
   try {
     await requireUser();
-  } catch {
+  } catch (e) {
+    if (isConfigError(e)) return configError(e);
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 

@@ -13,6 +13,9 @@ data:
   STORAGE_CLASS: "local-path"
   LB_SERVICE_TYPE: "LoadBalancer"
   NETWORK_POLICIES_ENABLED: "true"
+  # CHART_SOURCE : airgap (charts depuis Harbor OCI) ou internet (dépôts Helm publics).
+  # Sélectionne l'overlay platform-overlays/<valeur> côté Flux (path de la Kustomization).
+  CHART_SOURCE: "airgap"
   MINIO_REPLICAS: "4"
   MINIO_VOLUME_SIZE: "50Gi"
   LOKI_RETENTION: "168h"
