@@ -1,65 +1,148 @@
 flowchart LR
-  subgraph VMS["VMs (air-gap)"]
-    OTEL["Agent OTel\n(.deb/.rpm/.tar.gz)"]
-  end
 
-  subgraph EDGE["Edge Collectors (par DC)"]
-    E1["Edge DC1"]
-    E2["Edge DC2"]
-    E3["Edge DC3"]
-  end
+%% ================= VMS =================
+subgraph VMS["VM linux/windows avec agents OpenTelemetry<br/>(packages .deb / .rpm / .tar.gz)"]
+  OTEL["OTel Agent"]
+end
 
-  subgraph PE["Ingress (HAProxy + TLS)"]
-    LB["HAProxy x2 (active/active)"]
+%% ================= EDGE PAR DC =================
+subgraph EDGE["Edge Collectors (par Datacenter)"]
+  subgraph DC1["DC1"]
+    E1["Edge Collector #1"]
   end
+  subgraph DC2["DC2"]
+    E2["Edge Collector #2"]
+  end
+  subgraph DC3["DC3"]
+    E3["Edge Collector #3"]
+  end
+end
 
-  subgraph K8S["Cluster Kubernetes"]
-    subgraph ING["ns: ingestion"]
-      GW["OTel Gateway x3\nfilter/batch/enrich/sampling/queues"]
-    end
-    subgraph BK["ns: backends"]
-      L["Loki"]
-      M["Mimir"]
-      T["Tempo"]
-    end
-    subgraph ST["ns: storage"]
-      S3["MinIO (S3)"]
-    end
-    subgraph MON["ns: monitoring"]
-      P["Prometheus"]
-      AM["Alertmanager"]
-    end
-    subgraph VIS["ns: visualization"]
-      GF["Grafana"]
-    end
-    subgraph SEC["ns: security"]
-      CM["cert-manager + Vault PKI"]
-      KY["Kyverno"]
+%% ========== LoadBalancer ==========
+subgraph PE["Point d'entrée (TLS / Certificats)"]
+  LB1["LB / HAProxy / DNS VIP / F5"]
+  LB2["LB / HAProxy / DNS VIP / F5"]
+end
+
+%% ================= CLUSTER =================
+subgraph CLUSTER["cluster Kubernetes"]
+  subgraph PROJECT["projet observability"]
+    subgraph OBS["namespace"]
+
+      %% ========== OTel Gateway ==========
+      subgraph OTELG["OTel Gateway (secrets via Vault)"]
+        subgraph G["Gateway"]
+          subgraph G1["Gateway #1"]
+          end
+          subgraph G2["Gateway #2"]
+          end
+          subgraph G3["Gateway #3"]
+          end
+        end
+        subgraph TR["Traitements"]
+          F["Filter"]
+          B["Batch"]
+          RQ["Retry Queue"]
+          MQ["Memory Queue"]
+          PQ["Persistent Queue"]
+          TS["Trace Sampling"]
+          AE["Attribute Enrichment"]
+          F --> MQ
+          B --> MQ
+          AE --> TS
+          MQ --> PQ
+          TS --> PQ
+          PQ --> RQ
+        end
+        G1 -.-> F
+        G2 -.-> F
+        G3 -.-> F
+        G1 -.-> B
+        G2 -.-> B
+        G3 -.-> B
+        G1 -.-> AE
+        G2 -.-> AE
+        G3 -.-> AE
+      end
+
+      %% ========== Monitoring ==========
+      subgraph SUN["Monitoring"]
+        AH["Auto Healing"]
+        PT["Prometheus"]
+        PT --> AH
+      end
+
+      subgraph BK["ns: backend"]
+        %% ========== LOGS ==========
+        subgraph LOGS["Logs"]
+          L[(Loki)]
+        end
+        %% ========== METRICS ==========
+        subgraph METRICS["Metrics"]
+          MM[(Mimir)]
+        end
+        %% ========== TRACES ==========
+        subgraph TRACE["Traces"]
+          T[(Tempo)]
+        end
+        %% ========== Backup / Store ==========
+        subgraph STORE["Store"]
+          S3[(S3)]
+        end
+      end
+
+      %% ========== ALERTING ==========
+      subgraph ALERT["Alerting centralisé"]
+        AM["Alertmanager"]
+      end
+
+      %% ========== Grafana ==========
+      subgraph GRAFANA["Grafana"]
+        GF["Grafana"]
+      end
+
+      %% ========== Sécurité ==========
+      subgraph SEC["ns: security"]
+        CM["cert-manager + Vault PKI"]
+        KY["Kyverno"]
+      end
+
     end
   end
+end
 
-  subgraph INC["ns: incident"]
-    OU["OneUptime"]
-    GL["GLPI"]
-    SL["Slack (astreinte)"]
-  end
+%% ========== RAPPORT ==========
+subgraph RAPPORT["Incident"]
+  GL["GLPI"]
+  OU["OneUptime"]
+  SL["Notification"]
+end
 
-  OTEL -->|OTLP/mTLS| EDGE
-  EDGE -->|OTLP/mTLS| LB
-  LB --> GW
-  GW -->|logs| L
-  GW -->|metrics| M
-  GW -->|traces| T
-  L --> S3
-  M --> S3
-  T --> S3
-  L --> GF
-  M --> GF
-  T --> GF
-  P --> AM
-  AM -->|webhook| OU
-  OU -->|ticket| GL
-  OU -->|majeur/astreinte| SL
-  OU -.->|relais si AM down| AM
-  CM -.->|mTLS certs| GW
-  CM -.->|mTLS certs| BK
+%% ================= FLOWS =================
+RQ -.->|logs| L
+RQ -.->|metrics| MM
+RQ -.->|trace| T
+T -.->|visualise| GF
+L -.->|visualise| GF
+MM -.->|visualise| GF
+MM -.->|stocke| S3
+T -.->|stocke| S3
+L -.->|stocke| S3
+MM -.->|alerts| AM
+GF -.->|alerts| AM
+PT -.->|alerts| AM
+OU -.->|relais si AM down| AM
+AM -->|webhook| OU
+OU -->|ticket| GL
+OU -->|majeur/astreinte| SL
+CM -.->|mTLS certs| OTELG
+CM -.->|mTLS certs| BK
+
+%% Agent -> Edge
+OTEL -.->|OTLP/gRPC| EDGE
+
+%% Edge -> LB HA
+EDGE -->|OTLP/gRPC| PE
+
+%% LB -> Gateways
+PE -.->|charge| G

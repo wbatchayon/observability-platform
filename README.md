@@ -1,4 +1,5 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Auteur](https://img.shields.io/badge/Auteur-William%20BATCHAYON%20(Architecte%20Technique)-blue.svg)](https://github.com/wbatchayon)
 
 # Plateforme d'Observabilité reproductible, sécurisée et GitOps
 
@@ -41,7 +42,7 @@ VMs (agent OTel, air-gap) ──OTLP/mTLS──▶ Edge Collector (par DC)
         ├─ logs    ─▶ Loki  ─┐
         ├─ metrics ─▶ Mimir ─┼─▶ MinIO (S3 long terme)
         └─ traces  ─▶ Tempo ─┘
-                         └─▶ Grafana (visualisation unifiée) ─▶ OneUptime ─▶ GLPI + notifications
+                         └─▶ Grafana (visualisation unifiée) ─▶ Alertmanager ─▶ OneUptime ─▶ GLPI + notifications
 Prometheus ─▶ Alertmanager ─▶ OneUptime ─▶ GLPI + notifications
 ```
 
@@ -92,7 +93,3 @@ make deploy ENV=dev      # réconcilie la plateforme via Flux
 - Licence : [Apache 2.0](LICENSE)
 
 Toute PR vers `main` passe par la CI et l'approbation du [CODEOWNERS](.github/CODEOWNERS).
-
----
-
-*Auteur : William BATCHAYON, Architecte Technique*
