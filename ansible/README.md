@@ -14,17 +14,32 @@ Dépôt interne (apt/yum/tar.gz) ──install offline──▶ Agent OTel sur V
 ## Structure
 
 - `inventories/<env>/` - hôtes + `group_vars` (la surface de configuration par environnement).
+  Voir `inventories/_template/README.md` (groupes OS × équipe, secrets SOPS, CMDB).
 - `roles/common` - utilisateur de service, répertoires, détection OS.
 - `roles/otel-agent` - installation offline (Debian/RHEL/Windows), certificats mTLS, template de
-  config (`config.yaml.j2`), service systemd / Windows, handlers de redémarrage.
+  config (`config.yaml.j2`), **profils de collecte par équipe** (`profiles/`) et enrichissement
+  CMDB, service systemd / Windows, handlers. **Référence technique : `roles/otel-agent/README.md`.**
 - `playbooks/install-agent.yaml` - installe + configure.
 - `playbooks/configure-agent.yaml` - re-configure sans réinstaller.
 
-## Variables clés (`inventories/<env>/group_vars/all.yaml`)
+## Collecte : socle + profils par équipe
 
-`package_repo_url`, `otel_version` (0.148.0), `edge_collector_endpoint`, certificats mTLS
-(`vault_otel_tls_*` via ansible-vault/SOPS - jamais en clair). Ports du receiver OTLP ouverts
-sur le pare-feu de la VM : `otel_otlp_ports` (4317/4318), désactivable via `otel_open_firewall: false`.
+L'agent collecte un **socle commun** (hostmetrics, logs OS + sécurité, receiver OTLP mTLS) sur
+toutes les machines, auquel s'ajoute un **profil d'équipe** *data-driven* (`otel_profile`) qui
+injecte les receivers/logs métier du domaine (Database, Network, Storage, Virtualisation,
+Backup, Orchestration, Observabilité, Kubernetes) **sans dupliquer le socle**. Chaque hôte est
+placé dans un groupe OS **et** un groupe `team_*`. Détail du contrat de profil, ajout d'une
+équipe, sécurité (tag `log.category=security`) et CMDB : **`roles/otel-agent/README.md`**.
+
+## Variables clés (`inventories/<env>/group_vars/`)
+
+Dans `all/main.yaml` : `package_repo_url`, `otel_version` (0.148.0), `edge_collector_endpoint`.
+Dans `all/vault.yaml` (**chiffré SOPS**, jamais en clair) : certificats mTLS `vault_otel_tls_*`
+et secrets des profils (`vault_db_*`, `vault_snmp_*`…). Dans `team_<équipe>.yaml` : `otel_profile`
++ endpoints non-secrets. Dans `host_vars/<hôte>.yaml` : attributs CMDB (`otel_cmdb_attributes`).
+Ports OTLP ouverts sur le pare-feu : `otel_otlp_ports` (4317/4318), désactivable via
+`otel_open_firewall: false` ; les receivers en écoute des profils (syslog) ouvrent leurs ports
+via `otel_profile_firewall_ports`.
 
 ### Certificat de l'agent (exigences d'émission)
 
