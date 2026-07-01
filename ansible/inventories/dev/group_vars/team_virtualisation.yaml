@@ -1,0 +1,16 @@
+---
+# Équipe Virtualisation → profil "virtualisation" (SNMP BMC + syslog DCS).
+otel_profile: virtualisation
+
+# Endpoint SNMP du BMC (iBMC/iDRAC/iLO) — un collecteur par nœud, ou cloner le receiver.
+vault_virt_bmc_snmp_endpoint: "udp://10.0.0.0:161"
+
+# Secrets SNMP v3 via group_vars/all/vault.yaml :
+#   vault_virt_bmc_snmp_v3_user/auth_password/priv_password
+#
+# (TODO API FusionCompute/eDME) si un exporter Prometheus intermédiaire est déployé :
+# vault_virt_api_exporter_endpoint: "virt-exporter.observability.internal:9102"
+# vault_virt_api_exporter_token: "{{ vault_... }}"   # à mettre dans vault.yaml
+# vault_virt_api_exporter_ca: "/etc/otelcol-contrib/tls/ca.crt"
+#
+# Port syslog ouvert automatiquement par le profil (5515/udp).

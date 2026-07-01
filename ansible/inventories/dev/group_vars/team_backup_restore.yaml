@@ -1,0 +1,15 @@
+---
+# Équipe Backup/Restore → profil "backup-restore" (SNMP baie + syslog détection MITRE).
+otel_profile: backup-restore
+
+# Endpoint SNMP de la baie backup (OceanProtect/eDME) :
+vault_backup_snmp_endpoint: "10.0.0.0"
+
+# Secrets SNMP v3 via group_vars/all/vault.yaml :
+#   vault_backup_snmp_user/auth_password/priv_password
+#
+# (TODO API OceanProtect) métier backup (success_rate, missing_job, drifts) — nécessite un
+# exporter Prometheus side-car ; activer le receiver commenté dans le profil puis :
+# vault_backup_oceanprotect_exporter_endpoint: "oceanprotect-exporter.observability.internal:9104"
+#
+# Port syslog ouvert automatiquement par le profil (5517/tcp).

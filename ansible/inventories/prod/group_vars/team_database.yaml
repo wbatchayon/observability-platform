@@ -1,0 +1,12 @@
+---
+# Équipe Database → profil de collecte "database" (sqlquery Oracle/MySQL/PG/MSSQL + logs).
+otel_profile: database
+
+# Secrets (DSN par moteur) fournis via group_vars/all/vault.yaml :
+#   vault_db_oracle_dsn, vault_db_mysql_dsn, vault_db_postgresql_dsn, vault_db_mssql_dsn
+#
+# Attribut db.system surchargeable par hôte (host_vars) : otel_db_system: postgresql
+#
+# NB mono-moteur : le profil branche les 4 moteurs. Sur un hôte n'hébergeant qu'un moteur,
+# adapter le profil (roles/otel-agent/profiles/database.yaml) ou dédier un groupe/host
+# pour éviter les erreurs de connexion des moteurs absents.

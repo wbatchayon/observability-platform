@@ -16,3 +16,22 @@ all:
       vars:
         ansible_connection: winrm
         ansible_winrm_transport: ntlm
+
+    # --- Dimension équipe/rôle (profil de collecte, cf. group_vars/team_*.yaml) ---
+    # Placer chaque hôte dans le groupe de l'équipe qui l'exploite (EN PLUS de son groupe OS).
+    team_database:
+      hosts: {}
+    team_network:
+      hosts: {}
+    team_storage:
+      hosts: {}
+    team_virtualisation:
+      hosts: {}
+    team_backup_restore:
+      hosts: {}
+    team_orchestration:
+      hosts: {}
+    team_observabilite:
+      hosts: {}
+    team_kubernetes:
+      hosts: {}

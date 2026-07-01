@@ -1,0 +1,31 @@
+---
+# Équipe Orchestration (Cloud) → profil "orchestration" (Prometheus + audits).
+otel_profile: orchestration
+
+# Cibles /metrics (listes de "host:port") — renseigner celles présentes :
+vault_orch_argocd_targets: ["argocd-metrics.argocd:8082"]
+vault_orch_harbor_targets: ["harbor-exporter.harbor:8001"]
+vault_orch_nexus_targets: ["nexus.ci:8081"]
+vault_orch_openbao_targets: ["openbao.vault:8200"]
+vault_orch_saltstack_targets: []        # via salt-exporter, sinon laisser vide
+vault_orch_app_metrics_targets: []      # endpoints /actuator/prometheus ou /metrics des applis
+vault_orch_blackbox_targets: []         # cibles DNS/NTP/LDAP à sonder
+vault_orch_blackbox_exporter: "blackbox-exporter.observability.internal:9115"
+vault_orch_blackbox_module: "icmp"
+
+# Chemins de logs/audit sur l'hôte (adapter au déploiement) :
+vault_orch_openbao_audit_path: "/var/log/openbao/audit.log"
+vault_orch_openbao_ca_file: "/etc/otelcol-contrib/tls/ca.crt"
+vault_orch_harbor_audit_path: "/var/log/harbor/audit.log"
+vault_orch_argocd_log_path: "/var/log/argocd/argocd.log"
+vault_orch_salt_log_path: "/var/log/salt/master"
+vault_orch_salt_minion_log_path: "/var/log/salt/minion"
+vault_orch_ansible_log_path: "/var/log/ansible/ansible.log"
+vault_orch_k8s_audit_path: "/var/log/kubernetes/audit/audit.log"
+vault_orch_business_log_glob: "/var/log/apps/*/business*.log"
+
+# Secrets via group_vars/all/vault.yaml :
+#   vault_orch_nexus_metrics_user/password, vault_orch_openbao_metrics_token
+#
+# Ce profil active otel_collect_process_metrics (Top process CPU/RAM). Traces applicatives
+# collectées par le receiver otlp du socle (applis instrumentées → OTLP mTLS).

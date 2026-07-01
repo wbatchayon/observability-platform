@@ -1,0 +1,26 @@
+---
+# Équipe Core Network → profil "network" (SNMP + syslog + blackbox latences).
+otel_profile: network
+
+# Endpoints des équipements interrogés en SNMP (non secrets — renseigner) :
+fortigate_snmp_host: "10.0.0.0"        # FortiGate
+switches_snmp_host: "10.0.0.0"         # Leaf/Spine
+fortiadc_snmp_host: "10.0.0.0"         # FortiADC (LB)
+efficientip_snmp_host: "10.0.0.0"      # EfficientIP (DNS/DHCP)
+
+# Sondes de latence/joignabilité via blackbox_exporter (ICMP/HTTP) :
+blackbox_exporter_endpoint: "blackbox-exporter.observability.internal:9115"
+probe_target_arc_netcenter: "10.0.0.0"
+probe_target_arc_internet: "8.8.8.8"
+probe_target_link_iz: "10.0.0.0"
+probe_target_internet_http: "https://www.google.com"
+
+# (Optionnel) endpoint exporter EfficientIP si déployé (dns.query.count, dhcp.scope…) :
+# efficientip_exporter_endpoint: "efficientip-exporter.observability.internal:9101"
+
+# Secrets SNMP via group_vars/all/vault.yaml :
+#   vault_snmp_fortigate_user/auth_password/priv_password (v3)
+#   vault_snmp_fortiadc_user/auth_password/priv_password (v3)
+#   vault_snmp_switches_community, vault_snmp_dns_dhcp_community (v2c)
+#
+# Ports syslog ouverts automatiquement par le profil (5514/tcp, 5515/udp).
