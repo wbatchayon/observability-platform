@@ -1,0 +1,25 @@
+---
+# Équipe Observabilité → profil "observabilite" (auto-surveillance de la stack).
+otel_profile: observabilite
+
+# Endpoints /metrics des composants (adapter aux Services internes du cluster) :
+observabilite_loki_metrics_endpoint: "loki-gateway.observability:3100"
+observabilite_mimir_metrics_endpoint: "mimir-gateway.observability:8080"
+observabilite_tempo_metrics_endpoint: "tempo.observability:3200"
+observabilite_grafana_metrics_endpoint: "grafana.observability:3000"
+observabilite_gateway_metrics_endpoint: "otel-gateway.observability:8888"
+
+# Chemins de logs (uniquement si les composants écrivent sur le disque de la VM ;
+# en Kubernetes, les logs des pods sont collectés côté cluster — voir la note du profil) :
+observabilite_loki_log_path: "/var/log/loki/loki.log"
+observabilite_mimir_log_path: "/var/log/mimir/mimir.log"
+observabilite_tempo_log_path: "/var/log/tempo/tempo.log"
+observabilite_grafana_log_path: "/var/log/grafana/grafana.log"
+observabilite_gateway_log_path: "/var/log/otelcol/gateway.log"
+
+# Secrets (auth des /metrics) via group_vars/all/vault.yaml :
+#   vault_observabilite_loki_user/password, vault_observabilite_mimir_user/password,
+#   vault_observabilite_grafana_token, vault_observabilite_scrape_token
+#
+# NB déploiement : ces composants tournent généralement DANS le cluster K8s. Adapter les
+# endpoints (agent VM ciblant la gateway interne vs collector in-cluster).

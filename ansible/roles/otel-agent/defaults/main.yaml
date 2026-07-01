@@ -5,6 +5,52 @@ otel_tls_dir_linux: /etc/otelcol-contrib/tls
 otel_tls_dir_windows: C:\ProgramData\otelcol-contrib\tls
 otel_service_name_linux: otelcol-contrib
 otel_service_name_windows: otelcol-contrib
+
+# --- Prise en compte des besoins équipes (Besoins détaillé.xlsx / Besoin_securité.xlsx) ---
+# Enrichissement « profil piloté par donnée » : attributs attachés à TOUTE la télémétrie
+# de l'hôte pour permettre le routage et la rétention par classe côté Gateway/backends.
+# À surcharger par groupe d'hôtes (group_vars) pour refléter l'équipe/domaine concerné.
+otel_team: "unassigned"
+otel_domain: "socle-commun"
+otel_criticality: "medium"          # faible | medium | high | critique
+otel_retention_class: "standard"    # short | standard | long (mappé en rétention côté backend)
+
+# Enrichissement CMDB : attributs du parc (propriétaire, code appli, astreinte,
+# localisation, code service…) attachés à toute la télémétrie pour la recherche et la
+# corrélation dans Grafana. Alimenté par host_vars, synchronisé depuis la CMDB.
+# Dict {clé_attribut: valeur}. Voir inventories/_template/host_vars/*.example.yaml.
+otel_cmdb_attributes: {}
+
+# --- Framework de profils d'équipe (data-driven) ---
+# Un profil = un fichier roles/otel-agent/profiles/<nom>.yaml chargé quand otel_profile
+# est défini (cf. group_vars). Il injecte des receivers/logs/traces métier + attributs,
+# SANS jamais modifier le template. Défauts vides = socle commun seul.
+otel_profile: ""                       # ex. "database", "network"… (nom du fichier profil)
+otel_profile_receivers: {}             # dict {nom_receiver: {config OTel}} injecté tel quel
+otel_profile_metrics_receivers: []     # noms de receivers à brancher au pipeline metrics
+otel_profile_logs_receivers: []        # idem pipeline logs
+otel_profile_traces_receivers: []      # idem pipeline traces
+otel_profile_resource_attributes: []   # [{key, value, action}] attributs additionnels
+# Ports en écoute à ouvrir sur le pare-feu pour ce profil (ex. receivers syslog).
+# Liste de {port, proto} ; proto = tcp|udp. Vide pour les profils en pull (snmp/prometheus).
+otel_profile_firewall_ports: []        # ex. [{port: 5514, proto: tcp}, {port: 5515, proto: udp}]
+
+# Métriques par processus (Top process CPU/RAM — besoins Orchestration/Socle Commun).
+# Coûteux et nécessite des privilèges : désactivé par défaut.
+otel_collect_process_metrics: false
+
+# Sources de logs à vocation sécurité (auth/brute-force, kernel, audit, changements de
+# conf) — collectées séparément et taguées log.category=security pour la détection en
+# aval (catalogue MITRE ATT&CK, cf. Besoin_securité.xlsx). Le canal Sécurité Windows est
+# géré nativement par windowseventlog/security (pas via ces chemins).
+otel_security_log_paths_linux:
+  - /var/log/auth.log
+  - /var/log/secure
+  - /var/log/kern.log
+  - /var/log/audit/audit.log
+  - /var/log/dpkg.log
+  - /var/log/yum.log
+  - /var/log/dnf.log
 # Receiver OTLP exposé sur le réseau (mTLS) : ports à ouvrir sur le pare-feu de la VM.
 otel_open_firewall: true
 otel_otlp_ports:

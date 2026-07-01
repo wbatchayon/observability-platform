@@ -1,7 +1,14 @@
 ---
 # Inventaire template — copier vers inventories/<env>/ et renseigner les hôtes.
+#
+# Un hôte appartient à DEUX dimensions de groupes :
+#   1. son OS          (linux_debian / linux_rhel / windows) → installation de l'agent
+#   2. son équipe/rôle (team_*)                              → profil de collecte métier
+# Le mapping team_* → profil OTel est défini dans group_vars/<team_*>.yaml.
+# Les attributs CMDB (propriétaire, code appli, astreinte…) sont dans host_vars/<hôte>.yaml.
 all:
   children:
+    # --- Dimension OS (installation/packaging) ---
     linux_debian:
       hosts:
         vm-debian-01:
@@ -17,3 +24,25 @@ all:
       vars:
         ansible_connection: winrm
         ansible_winrm_transport: ntlm
+
+    # --- Dimension équipe/rôle (profil de collecte, cf. group_vars/team_*.yaml) ---
+    # Placez chaque hôte dans le groupe de l'équipe qui l'exploite. Un même hôte peut
+    # rester dans son groupe OS ci-dessus ET dans un groupe team_* ci-dessous.
+    team_database:
+      hosts:
+        vm-rhel-01: {}                 # ex. serveur Oracle/MySQL/PG/MSSQL
+    team_network:
+      hosts: {}                        # ex. VM collectrice SNMP/syslog du réseau
+    team_storage:
+      hosts: {}
+    team_virtualisation:
+      hosts: {}
+    team_backup_restore:
+      hosts: {}
+    team_orchestration:
+      hosts:
+        vm-debian-01: {}               # ex. hôte ArgoCD/Harbor/OpenBao/Salt
+    team_observabilite:
+      hosts: {}
+    team_kubernetes:
+      hosts: {}                        # collector avec accès cluster (RBAC/kubeconfig)

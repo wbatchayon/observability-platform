@@ -1,0 +1,254 @@
+---
+# =============================================================================
+# Profil OTel Collector — domaine « observabilite » (auto-surveillance de la
+# stack d'observabilité : OTel Collector, Loki, Mimir, Tempo, Grafana).
+#
+# Chargé par roles/otel-agent/tasks/main.yaml (include_vars) quand
+# otel_profile == "observabilite". N'ajoute QUE le scraping/collecte des AUTRES
+# composants de la stack ; le socle (hostmetrics, filelog générique, journald,
+# otlp mTLS, logs sécurité OS, attributs team/domain/criticality/retention_class
+# et l'auto-télémétrie prometheus/internal DE L'AGENT lui-même) reste géré par
+# le template config.yaml.j2.
+#
+# Besoins : Besoins détaillé.xlsx (feuille Observabilité) + Besoin_securité.xlsx
+# (catégorie Observability). Technos : OTel, Loki, Mimir, Tempo, Grafana.
+#
+# ATTENTION DÉPLOIEMENT : ces composants tournent le plus souvent DANS le
+# cluster Kubernetes (Loki/Mimir/Tempo/Grafana, éventuel collector gateway), pas
+# sur la VM qui héberge cet agent. Le profil DÉFINIT les receivers mais les
+# endpoints (variables ci-dessous) et le mode de collecte doivent être adaptés :
+#   - Agent sur VM : cibler les endpoints internes/gateway du cluster.
+#   - Déploiement cluster (sidecar / DaemonSet / gateway) : préférer la collecte
+#     côté cluster (les logs disque des composants ne sont PAS accessibles depuis
+#     la VM ; ils sont alors récupérés via filelog K8s / stdout des pods).
+# =============================================================================
+
+# --- Attributs de routage/rétention (colonnes des besoins) ---------------------
+otel_team: "Observabilité"
+otel_domain: "observabilite"
+otel_criticality: "high"          # dispo de la chaîne d'ingestion = critique
+otel_retention_class: "standard"
+
+# --- Attributs additionnels du domaine ----------------------------------------
+otel_profile_resource_attributes:
+  - {key: "service.namespace", value: "observability", action: upsert}
+  # Sert au routage des alertes « perte de métriques/logs d'un service critique »
+  # et à la corrélation des événements sécurité observabilité côté Gateway.
+  - {key: "observability.selfmonitoring", value: "true", action: upsert}
+
+# =============================================================================
+# RECEIVERS DU PROFIL
+# Injectés tels quels dans la section receivers: du collector (to_nice_yaml).
+# Receivers/operators disponibles UNIQUEMENT dans otelcol-contrib.
+# =============================================================================
+otel_profile_receivers:
+
+  # ---------------------------------------------------------------------------
+  # MÉTRIQUES — un scrape_config Prometheus par composant (endpoint /metrics).
+  # La disponibilité (`*.status`) est DÉRIVÉE de la métrique synthétique `up`
+  # générée par le receiver prometheus pour chaque job : up==1 → service UP,
+  # up==0 → service DOWN/scrape en échec (= perte soudaine de métriques d'un
+  # service critique, cf. Besoin_securité.xlsx). Le nom métier (loki.status,
+  # mimir.status, …) est reconstruit côté backend à partir de up{job="..."}.
+  # Auth éventuelle : décommenter basic_auth/authorization/tls_config et pointer
+  # vers des secrets Vault (ex. {{ vault_observabilite_scrape_token }}).
+  # ---------------------------------------------------------------------------
+
+  # --- Loki (endpoint /metrics, port 3100 par défaut) ------------------------
+  # loki.status                     → up{job="loki"}  (dispo ingestion logs)
+  # loki.ingester.received_entries_rate → rate(loki_distributor_lines_received_total)
+  #                                       / loki_ingester_streams (débit entrées)
+  # loki.querier.query_latency      → loki_request_duration_seconds (route ~ querier)
+  # loki.storage.used_bytes         → loki_ingester_memory_chunks /
+  #                                    loki_boltdb_shipper_* / stockage objet
+  prometheus/loki:
+    config:
+      scrape_configs:
+        - job_name: loki
+          scrape_interval: 30s
+          metrics_path: /metrics
+          static_configs:
+            - targets: ["{{ observabilite_loki_metrics_endpoint | default('loki-gateway:3100') }}"]
+          # basic_auth:
+          #   username: "{{ vault_observabilite_loki_user | default('') }}"
+          #   password: "{{ vault_observabilite_loki_password | default('') }}"
+          # tls_config:
+          #   ca_file: /etc/otelcol-contrib/tls/ca.crt
+          #   insecure_skip_verify: false
+
+  # --- Mimir (endpoint /metrics, port 8080 par défaut) -----------------------
+  # Mimir = base Cortex → métriques préfixées cortex_*.
+  # mimir.status                    → up{job="mimir"}  (dispo ingestion métriques)
+  # mimir.ingester.received_samples_rate → rate(cortex_distributor_received_samples_total)
+  #                                        / cortex_ingester_ingested_samples_total
+  # mimir.querier.query_latency     → cortex_request_duration_seconds (route ~ query)
+  # mimir.storage.used_bytes        → cortex_ingester_memory_series /
+  #                                    cortex_bucket_* (stockage objet)
+  prometheus/mimir:
+    config:
+      scrape_configs:
+        - job_name: mimir
+          scrape_interval: 30s
+          metrics_path: /metrics
+          static_configs:
+            - targets: ["{{ observabilite_mimir_metrics_endpoint | default('mimir-gateway:8080') }}"]
+          # basic_auth:
+          #   username: "{{ vault_observabilite_mimir_user | default('') }}"
+          #   password: "{{ vault_observabilite_mimir_password | default('') }}"
+
+  # --- Tempo (endpoint /metrics, port 3200 par défaut) -----------------------
+  # tempo.status                    → up{job="tempo"}  (dispo ingestion traces)
+  # tempo.ingester.received_spans_rate → rate(tempo_distributor_spans_received_total)
+  #                                      / tempo_ingester_traces_created_total
+  # tempo.querier.query_latency     → tempo_request_duration_seconds (route ~ query)
+  # tempo.storage.used_bytes        → tempodb_backend_bytes / tempo_ingester_*
+  prometheus/tempo:
+    config:
+      scrape_configs:
+        - job_name: tempo
+          scrape_interval: 30s
+          metrics_path: /metrics
+          static_configs:
+            - targets: ["{{ observabilite_tempo_metrics_endpoint | default('tempo:3200') }}"]
+
+  # --- Grafana (endpoint /metrics, port 3000 par défaut) ---------------------
+  # grafana.status                  → up{job="grafana"}  (dispo portail/visualisation)
+  # grafana.api.request_latency     → grafana_http_request_duration_seconds
+  #                                    (détecte aussi l'« activité API excessive »)
+  # grafana.database.connections_open → grafana_database_conn_open
+  # NB : le scrape /metrics Grafana peut exiger un token (auth.anonymous off) →
+  #      renseigner authorization via Vault.
+  prometheus/grafana:
+    config:
+      scrape_configs:
+        - job_name: grafana
+          scrape_interval: 30s
+          metrics_path: /metrics
+          static_configs:
+            - targets: ["{{ observabilite_grafana_metrics_endpoint | default('grafana:3000') }}"]
+          # authorization:
+          #   type: Bearer
+          #   credentials: "{{ vault_observabilite_grafana_token | default('') }}"
+
+  # --- Collector gateway (OTel Collector d'agrégation, /metrics port 8888) ----
+  # Auto-surveillance de la fiabilité de la chaîne (Critique — Besoins détaillé).
+  # Distinct de prometheus/internal (auto-télémétrie de CET agent, géré par le
+  # socle) : ici on scrappe le collector GATEWAY/Edge en amont.
+  # otel.collector.status                 → up{job="otelcol-gateway"}
+  # otel.collector.received_signals_total → otelcol_receiver_accepted_spans_total +
+  #                                         otelcol_receiver_accepted_metric_points_total +
+  #                                         otelcol_receiver_accepted_log_records_total
+  # otel.collector.dropped_signals_total  → otelcol_processor_dropped_* +
+  #                                         otelcol_exporter_send_failed_* +
+  #                                         otelcol_receiver_refused_*
+  #                                         (perte de signaux = fiabilité dégradée)
+  prometheus/gateway:
+    config:
+      scrape_configs:
+        - job_name: otelcol-gateway
+          scrape_interval: 30s
+          metrics_path: /metrics
+          static_configs:
+            - targets: ["{{ observabilite_gateway_metrics_endpoint | default('otel-gateway:8888') }}"]
+
+  # ---------------------------------------------------------------------------
+  # LOGS D'ERREUR DES COMPOSANTS — receiver filelog (si logs sur disque de la VM).
+  # LIMITE : en déploiement Kubernetes, ces composants écrivent sur stdout ; leurs
+  # logs sont collectés côté cluster (filelog K8s / DaemonSet), PAS via ces
+  # chemins. Ces receivers ne servent que si les composants tournent sur la VM
+  # (ou binaires/systemd). start_at: end + storage: file_storage (persistance des
+  # offsets, cf. socle). L'operator ajoute log.category=security pour les
+  # événements de sécurité observabilité (modification d'endpoints de collecte,
+  # échecs d'auth Grafana/portail) — routage/rétention sécurité côté Gateway
+  # (Besoin_securité.xlsx : suppression d'agents, reconfiguration pipeline,
+  # exfiltration vers endpoint inconnu, tentatives de connexion échouées).
+  # ---------------------------------------------------------------------------
+
+  # --- Logs Loki -------------------------------------------------------------
+  # loki.service.error
+  filelog/loki:
+    include:
+      - "{{ observabilite_loki_log_path | default('/var/log/loki/*.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      # Événements sécurité : erreurs d'auth / modification de configuration.
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "(?i)(unauthorized|auth|forbidden|config.*chang|permission denied)"'
+
+  # --- Logs Mimir ------------------------------------------------------------
+  # mimir.service.error
+  filelog/mimir:
+    include:
+      - "{{ observabilite_mimir_log_path | default('/var/log/mimir/*.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "(?i)(unauthorized|auth|forbidden|config.*chang|permission denied)"'
+
+  # --- Logs Tempo ------------------------------------------------------------
+  # tempo.service.error
+  filelog/tempo:
+    include:
+      - "{{ observabilite_tempo_log_path | default('/var/log/tempo/*.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "(?i)(unauthorized|auth|forbidden|config.*chang|permission denied)"'
+
+  # --- Logs Grafana ----------------------------------------------------------
+  # grafana.service.error — inclut les tentatives de connexion échouées sur le
+  # portail (Besoin_securité.xlsx : brute-force / accès non autorisé au portail).
+  filelog/grafana:
+    include:
+      - "{{ observabilite_grafana_log_path | default('/var/log/grafana/grafana.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "(?i)(invalid username or password|unauthorized|failed to authenticate|login.*fail|forbidden)"'
+
+  # --- Logs collector gateway ------------------------------------------------
+  # otel.collector.error — erreurs du collector d'agrégation (export en échec,
+  # receiver refusé, reconfiguration du pipeline).
+  filelog/gateway:
+    include:
+      - "{{ observabilite_gateway_log_path | default('/var/log/otelcol-gateway/*.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "(?i)(unauthorized|forbidden|config.*chang|unknown.*exporter|permission denied)"'
+
+# =============================================================================
+# BRANCHEMENT AUX PIPELINES (le socle concatène ces listes aux receivers de base)
+# =============================================================================
+otel_profile_metrics_receivers:
+  - prometheus/loki
+  - prometheus/mimir
+  - prometheus/tempo
+  - prometheus/grafana
+  - prometheus/gateway
+
+otel_profile_logs_receivers:
+  - filelog/loki
+  - filelog/mimir
+  - filelog/tempo
+  - filelog/grafana
+  - filelog/gateway
+
+# Pas de traces à ingérer par ce profil : Tempo est surveillé via /metrics, pas
+# en réémettant ses spans. Le socle conserve otlp sur le pipeline traces.
+otel_profile_traces_receivers: []

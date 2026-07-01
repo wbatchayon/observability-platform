@@ -1,0 +1,284 @@
+---
+# =============================================================================
+# Profil OpenTelemetry — Domaine STORAGE (Besoins détaillé.xlsx, feuille Storage)
+# -----------------------------------------------------------------------------
+# Techno cible : baies eDME / OceanStor (collecte API + SNMP). L'agent otelcol-contrib
+# agit en POLLER DISTANT : il n'est PAS installé sur la baie, il l'interroge en SNMP
+# et reçoit ses logs en syslog. Aucune métrique/log OS local n'est ajouté ici (socle).
+#
+# Ce fichier n'injecte QUE des receivers métier via le framework de profils
+# (cf. defaults/main.yaml + templates/config.yaml.j2). Il ne modifie pas le socle.
+#
+# Secrets/endpoints : variables Vault `vault_snmp_storage_*` (jamais en clair ici).
+# NB : le port syslog 5516/tcp+udp doit être ouvert sur le pare-feu de la VM agent
+#      (hors périmètre de ce profil — cf. otel_open_firewall / firewall.yaml).
+# =============================================================================
+
+# --- Attributs de routage/rétention (colonnes des besoins) ---
+otel_team: "Storage"
+otel_domain: "storage"
+otel_criticality: "high"          # baie/volume = Critique pour la dispo et la latence
+otel_retention_class: "standard"
+
+# Attributs additionnels de contexte, attachés à toute la télémétrie du profil.
+otel_profile_resource_attributes:
+  - {key: storage.technology, value: "eDME", action: upsert}
+  - {key: storage.vendor, value: "Huawei-OceanStor", action: upsert}
+  - {key: collection.mode, value: "remote-poller", action: upsert}
+
+# --- Branchement des receivers du profil sur les pipelines ---
+otel_profile_metrics_receivers:
+  - snmp/storage_array
+otel_profile_logs_receivers:
+  - syslog/storage_tcp
+  - syslog/storage_udp
+otel_profile_traces_receivers: []   # pas de tracing sur une baie de stockage
+
+# Ports d'écoute syslog à ouvrir sur le pare-feu de la VM agent.
+otel_profile_firewall_ports:
+  - {port: 5516, proto: tcp}   # syslog/storage_tcp
+  - {port: 5516, proto: udp}   # syslog/storage_udp
+
+# =============================================================================
+# Receivers métier (injectés tels quels dans la section receivers du collector)
+# =============================================================================
+otel_profile_receivers:
+
+  # ---------------------------------------------------------------------------
+  # MÉTRIQUES BAIE / CONTRÔLEUR / VOLUME — SNMP v3 (poll de la baie eDME/OceanStor)
+  # ---------------------------------------------------------------------------
+  # Les baies OceanStor exposent leurs compteurs de perf et de capacité via une MIB
+  # propriétaire (entreprise Huawei = 1.3.6.1.4.1.2011). Les OID ci-dessous sont
+  # PLAUSIBLES et doivent être ajustés à la version de MIB déployée (OceanStor SNMP
+  # MIB Reference). SNMP v3 auth_priv retenu pour la posture sécurité (pas de v2c en
+  # clair) ; bascule v2c possible via `version: v2c` + `community`.
+  snmp/storage_array:
+    collection_interval: 60s
+    endpoint: "udp://{{ vault_snmp_storage_host }}:161"
+    version: v3
+    security_level: auth_priv
+    user: "{{ vault_snmp_storage_user }}"
+    auth_type: "SHA"
+    auth_password: "{{ vault_snmp_storage_auth_password }}"
+    privacy_type: "AES"
+    privacy_password: "{{ vault_snmp_storage_priv_password }}"
+    timeout: 10s
+
+    # Attributs de ressource : identité de la baie (une baie = une ressource).
+    resource_attributes:
+      storage.array.serial:
+        # OID scalaire : numéro de série / identifiant système de la baie.
+        oid: "1.3.6.1.4.1.2011.2.251.10.1.1.1.1.0"   # TODO MIB : sysSerialNumber
+
+    # Attributs indexés : ré-utilisés par les column_oids (par contrôleur / par volume).
+    attributes:
+      controller.id:
+        # OID de la colonne "nom/index de contrôleur" (table des contrôleurs).
+        oid: "1.3.6.1.4.1.2011.2.251.10.2.1.1.2"     # TODO MIB : controllerName
+      volume.id:
+        # OID de la colonne "nom de volume/LUN/datastore" (table des volumes).
+        oid: "1.3.6.1.4.1.2011.2.251.10.3.1.1.2"     # TODO MIB : lunName
+
+    metrics:
+      # === Baie de stockage ===
+      # storage.system.status (Critique) — état global de la baie (0=OK, !=0=dégradé/panne).
+      storage.system.status:
+        unit: "1"
+        description: "État de santé global de la baie (énuméré MIB : normal/degraded/fault)."
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.1.1.1.4.0"   # TODO MIB : systemHealthStatus
+
+      # storage.capacity.total — capacité brute totale (voir unité MIB : souvent en secteurs/Mo).
+      storage.capacity.total:
+        unit: "By"
+        description: "Capacité totale de la baie (ajuster le facteur d'échelle selon l'unité MIB)."
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.1.1.1.10.0"  # TODO MIB : totalCapacity
+
+      # storage.capacity.used (Critique) — capacité consommée (seuil de saturation).
+      storage.capacity.used:
+        unit: "By"
+        description: "Capacité utilisée de la baie (Critique — saturation stockage)."
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.1.1.1.11.0"  # TODO MIB : usedCapacity
+
+      # storage.capacity.free — capacité disponible.
+      storage.capacity.free:
+        unit: "By"
+        description: "Capacité libre de la baie."
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.1.1.1.12.0"  # TODO MIB : freeCapacity
+
+      # === Contrôleur (table indexée par controller.id) ===
+      # controller.status (Critique) — état du contrôleur (détecte panne/failover).
+      controller.status:
+        unit: "1"
+        description: "État de chaque contrôleur (Critique — panne/bascule)."
+        gauge:
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.2.1.1.5"     # TODO MIB : controllerRunningStatus
+            attributes:
+              - name: controller.id
+
+      # controller.cpu.usage — charge CPU du contrôleur (%).
+      controller.cpu.usage:
+        unit: "%"
+        description: "Taux d'utilisation CPU du contrôleur."
+        gauge:
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.2.1.1.8"     # TODO MIB : controllerCpuUsage
+            attributes:
+              - name: controller.id
+
+      # controller.cache.usage — taux d'occupation du cache (impacte la latence).
+      controller.cache.usage:
+        unit: "%"
+        description: "Taux d'occupation du cache du contrôleur."
+        gauge:
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.2.1.1.9"     # TODO MIB : controllerCacheUsage
+            attributes:
+              - name: controller.id
+
+      # === Volume / Datastore / LUN (table indexée par volume.id) ===
+      # volume.iops — opérations d'E/S par seconde.
+      volume.iops:
+        unit: "{IOPS}"
+        description: "IOPS par volume/LUN."
+        gauge:
+          value_type: double
+        column_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.3.1.1.20"    # TODO MIB : lunTotalIops
+            attributes:
+              - name: volume.id
+
+      # volume.latency (Critique) — temps de réponse E/S (ms).
+      volume.latency:
+        unit: "ms"
+        description: "Latence d'E/S par volume/LUN (Critique — perf applicative)."
+        gauge:
+          value_type: double
+        column_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.3.1.1.21"    # TODO MIB : lunAverageLatency
+            attributes:
+              - name: volume.id
+
+      # volume.throughput — débit E/S (octets/s).
+      volume.throughput:
+        unit: "By/s"
+        description: "Débit d'E/S par volume/LUN."
+        gauge:
+          value_type: double
+        column_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.3.1.1.22"    # TODO MIB : lunBandwidth
+            attributes:
+              - name: volume.id
+
+      # volume.capacity.used — capacité consommée par volume.
+      volume.capacity.used:
+        unit: "By"
+        description: "Capacité utilisée par volume/LUN."
+        gauge:
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.4.1.2011.2.251.10.3.1.1.10"    # TODO MIB : lunUsedCapacity
+            attributes:
+              - name: volume.id
+
+  # ---------------------------------------------------------------------------
+  # TODO — Métriques de perf FINES via API eDME / exporter Prometheus
+  # ---------------------------------------------------------------------------
+  # Si l'orchestrateur eDME expose un exporter Prometheus (ou un endpoint /metrics via
+  # un exporter tiers) pour la latence/IOPS à granularité fine (par host group, par
+  # tier QoS…), le receiver `prometheus` du contrib serait la bonne source :
+  #
+  #   prometheus/storage_edme:
+  #     config:
+  #       scrape_configs:
+  #         - job_name: edme
+  #           scheme: https
+  #           scrape_interval: 30s
+  #           static_configs:
+  #             - targets: ["{{ vault_edme_metrics_endpoint }}"]
+  #           tls_config:
+  #             ca_file: /etc/otelcol-contrib/tls/ca.crt
+  #
+  # À NE PAS activer tant qu'un exporter n'est pas déployé côté eDME : il n'existe
+  # AUCUN receiver contrib natif pour l'API REST propriétaire eDME. Deux options :
+  #   1. déployer un exporter Prometheus eDME puis brancher le receiver ci-dessus ;
+  #   2. rester sur SNMP (couverture actuelle) si la granularité suffit.
+  # SIGNALÉ : cette collecte "API fine" nécessite un développement/exporter custom.
+
+  # ---------------------------------------------------------------------------
+  # LOGS BAIE / CONTRÔLEUR / VOLUME — SYSLOG (la baie pousse ses logs vers l'agent)
+  # ---------------------------------------------------------------------------
+  # La baie est configurée pour émettre en syslog vers l'IP de l'agent, port 5516.
+  # Couvre : storage.log.system_error, controller.log.events (failover/resync),
+  # volume.log.error (IO/corruption). TCP + UDP pour couvrir les deux modes d'export.
+  # Les opérateurs taguent la catégorie fonctionnelle et — pour les accès admin /
+  # altérations de conf — la catégorie sécurité (Besoin_securité.xlsx).
+  syslog/storage_tcp:
+    tcp:
+      listen_address: "0.0.0.0:5516"
+    protocol: rfc5424          # bascule en rfc3164 si la baie n'émet pas en 5424
+    operators:
+      # Marque la source pour le routage aval.
+      - type: add
+        field: resource["log.source"]
+        value: storage-array
+      # Événement contrôleur : failover / resync / bascule.
+      - type: add
+        field: resource["storage.log.kind"]
+        value: controller.events
+        if: 'body.message != nil and (body.message matches "(?i)(failover|fail-over|resync|takeover|switchover|controller)")'
+      # Erreur volume : IO error / corruption / medium error.
+      - type: add
+        field: resource["storage.log.kind"]
+        value: volume.error
+        if: 'body.message != nil and (body.message matches "(?i)(corrupt|medium error|i/?o error|bad block|lun.*error|volume.*error)")'
+      # Erreur système baie par défaut (system_error).
+      - type: add
+        field: resource["storage.log.kind"]
+        value: system.error
+        if: 'body.message != nil and (body.message matches "(?i)(error|fault|critical|alarm|degraded)")'
+      # Sécurité : accès admin / altération de conf / suppression (log.category=security).
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body.message != nil and (body.message matches "(?i)(login|logon|logout|authentication|admin|password|privilege|account|config(uration)? chang|delete|remove|modif|create user)")'
+
+  syslog/storage_udp:
+    udp:
+      listen_address: "0.0.0.0:5516"
+    protocol: rfc5424
+    operators:
+      - type: add
+        field: resource["log.source"]
+        value: storage-array
+      - type: add
+        field: resource["storage.log.kind"]
+        value: controller.events
+        if: 'body.message != nil and (body.message matches "(?i)(failover|fail-over|resync|takeover|switchover|controller)")'
+      - type: add
+        field: resource["storage.log.kind"]
+        value: volume.error
+        if: 'body.message != nil and (body.message matches "(?i)(corrupt|medium error|i/?o error|bad block|lun.*error|volume.*error)")'
+      - type: add
+        field: resource["storage.log.kind"]
+        value: system.error
+        if: 'body.message != nil and (body.message matches "(?i)(error|fault|critical|alarm|degraded)")'
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body.message != nil and (body.message matches "(?i)(login|logon|logout|authentication|admin|password|privilege|account|config(uration)? chang|delete|remove|modif|create user)")'

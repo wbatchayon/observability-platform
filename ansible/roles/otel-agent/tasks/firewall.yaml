@@ -31,3 +31,35 @@
     state: present
   loop: "{{ otel_otlp_ports }}"
   when: ansible_facts['os_family'] == "Windows"
+
+# Ports en écoute propres au profil d'équipe (ex. receivers syslog) — tcp ET udp.
+- name: Ouvrir les ports du profil via firewalld (RHEL/CentOS)
+  ansible.posix.firewalld:
+    port: "{{ item.port }}/{{ item.proto }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ otel_profile_firewall_ports }}"
+  become: true
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Ouvrir les ports du profil via ufw (Debian/Ubuntu)
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+  loop: "{{ otel_profile_firewall_ports }}"
+  become: true
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Ouvrir les ports du profil dans le pare-feu Windows
+  community.windows.win_firewall_rule:
+    name: "OpenTelemetry profil {{ item.proto }} {{ item.port }}"
+    localport: "{{ item.port }}"
+    action: allow
+    direction: in
+    protocol: "{{ item.proto }}"
+    enabled: true
+    state: present
+  loop: "{{ otel_profile_firewall_ports }}"
+  when: ansible_facts['os_family'] == "Windows"

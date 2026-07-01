@@ -1,0 +1,199 @@
+---
+# =============================================================================
+# Profil d'équipe : VIRTUALISATION (Besoins détaillé.xlsx, feuille Virtualisation)
+# Technos : Huawei FusionCompute / FusionCube, eDME (collecte API propriétaire).
+# -----------------------------------------------------------------------------
+# L'agent otelcol-contrib agit ici en POLLER DISTANT (SNMP/API) des nœuds de
+# virtualisation et de leur plan de management (BMC iBMC/iDRAC/iLO, service de
+# gestion FusionCompute/eDME). Chargé via include_vars quand otel_profile ==
+# "virtualisation" ; n'ajoute QUE les receivers métier, le socle (hostmetrics,
+# filelog, journald, otlp mTLS, logs sécurité OS, attributs
+# team/domain/criticality/retention_class) reste géré par le template.
+#
+# Répartition des sources :
+#   - SNMP   : matériel exposé par le BMC (température, PSU/power.state, ventilos)
+#              -> receiver snmp/virt_hardware
+#   - SYSLOG : logs DCS / consoles hardware / service de gestion / hardware
+#              -> receiver syslog/virt (opérateur de pré-tag sécurité)
+#   - API    : métriques nœud/vnet/mgmt via FusionCompute/eDME (API propriétaire
+#              Huawei) -> PAS de receiver contrib dédié. Voir bloc TODO plus bas :
+#              nécessite le déploiement d'un exporter Prometheus intermédiaire.
+# =============================================================================
+
+otel_team: "Virtualisation"
+otel_domain: "virtualisation"
+otel_criticality: "medium"          # Criticité d'ensemble ; certains composants
+                                    # (température, PSU/power.state, mgmt.service.status)
+                                    # sont Critiques -> escalade portée par les règles
+                                    # d'alerte en aval, pas modifiable par hôte ici.
+otel_retention_class: "standard"
+
+# -----------------------------------------------------------------------------
+# Attributs de ressource additionnels (routage/rétention côté Gateway/backends).
+# -----------------------------------------------------------------------------
+otel_profile_resource_attributes:
+  - {key: "tech.stack", value: "huawei-fusioncompute", action: upsert}
+  - {key: "poller.role", value: "remote", action: upsert}   # agent = poller distant
+
+# -----------------------------------------------------------------------------
+# Receivers métier injectés dans otelcol-contrib (dict {nom: {config OTel}}).
+# -----------------------------------------------------------------------------
+otel_profile_receivers:
+
+  # ===========================================================================
+  # 1) MATÉRIEL DES NŒUDS DE VIRTUALISATION via BMC en SNMP (contrib `snmp`)
+  # ---------------------------------------------------------------------------
+  # Besoins couverts (Virtualisation > Nœud de virtualisation) :
+  #   - node.temperature  (Critique)  -> capteurs thermiques
+  #   - node.power.state / PSU (Critique) -> état des alimentations
+  #   - santé matérielle (ventilateurs) -> complète node.status côté hardware
+  # Le BMC (iBMC Huawei / iDRAC Dell / iLO HPE) expose ces capteurs en SNMP.
+  # OIDs ci-dessous : ENTITY-SENSOR-MIB (portable multi-vendeurs) pour les
+  # capteurs, + OID entreprise Huawei iBMC pour l'état des alimentations.
+  # À VALIDER contre la MIB réellement chargée sur le BMC cible.
+  #   iBMC Huawei : base 1.3.6.1.4.1.2011.2.235
+  #   iDRAC Dell  : base 1.3.6.1.4.1.674.10892.5
+  #   iLO HPE     : base 1.3.6.1.4.1.232
+  # NB : un receiver snmp cible UN endpoint BMC. Pour poller plusieurs nœuds,
+  # cloner ce bloc en snmp/virt_hardware_<node> et l'ajouter à
+  # otel_profile_metrics_receivers. Endpoint & creds fournis via Ansible Vault.
+  snmp/virt_hardware:
+    collection_interval: 60s
+    endpoint: "{{ vault_virt_bmc_snmp_endpoint }}"     # ex. udp://10.20.0.10:161
+    # SNMPv3 (auth+chiffrement) recommandé sur un plan de management ; creds Vault.
+    version: v3
+    security_level: auth_priv
+    user: "{{ vault_virt_bmc_snmp_v3_user }}"
+    auth_type: SHA
+    auth_password: "{{ vault_virt_bmc_snmp_v3_auth_password }}"
+    privacy_type: AES
+    privacy_password: "{{ vault_virt_bmc_snmp_v3_priv_password }}"
+    # Attributs indexés portés sur chaque point de mesure (n° / nom du capteur).
+    attributes:
+      sensor.index:
+        oid: "1.3.6.1.2.1.99.1.1.1.1"    # entPhySensorType index (ENTITY-SENSOR-MIB)
+    resource_attributes:
+      bmc.serial:
+        # Numéro de série châssis (ENTITY-MIB entPhysicalSerialNum, index 1).
+        oid: "1.3.6.1.2.1.47.1.1.1.1.11.1"
+    metrics:
+      # --- node.temperature (Critique) : capteurs thermiques du châssis ---
+      hw.node.temperature:
+        description: "Température des capteurs matériels du nœud (BMC)."
+        unit: "Cel"
+        gauge:
+          value_type: double
+        column_oids:
+          # entPhySensorValue — table des capteurs physiques (température/tension/…).
+          # Filtrage type=température à affiner selon la MIB (entPhySensorType=8).
+          - oid: "1.3.6.1.2.1.99.1.1.1.4"
+            attributes:
+              - name: sensor.index
+      # --- node.power.state / PSU (Critique) : santé des alimentations ---
+      hw.node.psu.status:
+        description: "État de santé des alimentations (PSU). 1=OK, autre=dégradé/absent."
+        unit: "1"
+        gauge:
+          value_type: int
+        column_oids:
+          # OID entreprise iBMC Huawei (table PSU) — À VALIDER contre la MIB iBMC.
+          # Dell : 1.3.6.1.4.1.674.10892.5.4.600.12.1.5 (powerSupplyStatus)
+          # HPE  : 1.3.6.1.4.1.232.6.2.9.3.1.4 (cpqHeFltTolPowerSupplyCondition)
+          - oid: "1.3.6.1.4.1.2011.2.235.1.1.16.50.1.7"
+      # --- Ventilateurs : complément santé matérielle (node.status) ---
+      hw.node.fan.speed:
+        description: "Vitesse des ventilateurs du nœud."
+        unit: "RPM"
+        gauge:
+          value_type: int
+        column_oids:
+          # entPhySensorValue filtré ventilateurs (entPhySensorType=10, RPM).
+          # À affiner selon la MIB ; alternative vendeur (iBMC fan table) possible.
+          - oid: "1.3.6.1.2.1.99.1.1.1.4"
+            attributes:
+              - name: sensor.index
+
+  # ===========================================================================
+  # 2) LOGS DCS / CONSOLES HARDWARE / SERVICE DE GESTION via SYSLOG
+  # ---------------------------------------------------------------------------
+  # Besoins couverts (logs) :
+  #   - node.log.hardware_error   (erreurs RAM/CPU/carte mère, remontées BMC/DCS)
+  #   - vnet.log.events           (changements de conf réseau virtuel interne)
+  #   - mgmt.log.events           (création VM, migration, snapshot)
+  #   - mgmt.log.error            (erreurs du service de gestion)
+  # Sources Besoin_securité (Virtualisation + Hardware) : "Logs de DCS",
+  # "Logs des consoles hardware", "Logs du hardware", "Observabilité".
+  # Les équipements/plateformes émettent en SYSLOG vers cet agent poller.
+  # L'opérateur ci-dessous pré-tague log.category=security les événements
+  # sensibles pour routage/rétention et détection en aval (MITRE ATT&CK) :
+  #   - suppression de VM critique
+  #   - connexion admin par personnes non habilitées / console admin en HNO
+  #   - échecs d'authentification répétés
+  #   - accès admin depuis pays inhabituels (corrélation géo faite en aval)
+  #   - ajout de rôles RBAC / déploiement suspect de workloads
+  #   - altération firmware/BIOS via iDRAC/iLO/iBMC
+  #   - activité réseau inhabituelle sur interfaces management out-of-band
+  # NB : ce tag est un pré-filtrage grossier ; les corrélations fines (géo,
+  # HNO, répétition, habilitation) sont réalisées côté Gateway/SIEM.
+  syslog/virt:
+    udp:
+      listen_address: "0.0.0.0:5515"
+    protocol: rfc3164        # format usuel des équipements hardware/DCS
+    location: UTC
+    operators:
+      # Catégorie de source (facilite le routage même hors sécurité).
+      - type: add
+        field: resource["log.source"]
+        value: "virtualisation-syslog"
+      # Pré-tag sécurité des événements sensibles (Besoin_securité.xlsx).
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "(?i)(delete.{0,20}vm|vm.{0,20}delet|destroy.{0,20}vm|admin.{0,20}log(i|o)n|console.{0,20}log(i|o)n|authenticat.{0,20}fail|failed.{0,20}(login|password|auth|authentication)|login.{0,20}fail|rbac|role.{0,20}(add|grant|assign|create)|grant.{0,20}role|deploy.{0,20}workload|firmware|bios|idrac|ilo|ibmc|out.?of.?band|oob)"'
+
+# -----------------------------------------------------------------------------
+# 3) MÉTRIQUES NŒUD / VNET / MGMT via FusionCompute / eDME  —  TODO (API propriétaire)
+# -----------------------------------------------------------------------------
+# Besoins NON couverts par SNMP/syslog, à collecter via l'API Huawei :
+#   - Nœud de virtualisation : node.status, node.cpu.usage, node.memory.usage
+#   - Réseau virtuel interne : vnet.traffic, vnet.errors, vnet.vlan.status
+#   - Service de gestion     : mgmt.service.status (Critique), mgmt.tasks.rate,
+#                              mgmt.api.latency
+# FusionCompute/eDME exposent une API REST PROPRIÉTAIRE Huawei : il n'existe PAS
+# de receiver otelcol-contrib dédié, et il ne faut pas en inventer un.
+# SOLUTION CIBLE : déployer un exporter Prometheus intermédiaire (sidecar/service
+# qui interroge l'API FusionCompute/eDME et expose /metrics), puis activer le
+# receiver `prometheus` ci-dessous et l'ajouter à otel_profile_metrics_receivers.
+# Tant que cet exporter n'est pas déployé, ce bloc reste en commentaire.
+#
+#   prometheus/virt_api:
+#     config:
+#       scrape_configs:
+#         - job_name: fusioncompute-edme
+#           scrape_interval: 60s
+#           metrics_path: /metrics
+#           scheme: https
+#           tls_config:
+#             ca_file: "{{ vault_virt_api_exporter_ca | default('') }}"
+#           authorization:
+#             credentials: "{{ vault_virt_api_exporter_token }}"
+#           static_configs:
+#             - targets: ["{{ vault_virt_api_exporter_endpoint }}"]  # ex. exporter:9310
+#
+# Une fois activé : ajouter "prometheus/virt_api" à otel_profile_metrics_receivers.
+
+# -----------------------------------------------------------------------------
+# Branchement des receivers du profil aux pipelines du template.
+# -----------------------------------------------------------------------------
+otel_profile_metrics_receivers:
+  - snmp/virt_hardware
+  # - prometheus/virt_api   # à décommenter une fois l'exporter API déployé (TODO ci-dessus)
+
+otel_profile_logs_receivers:
+  - syslog/virt
+
+otel_profile_traces_receivers: []
+
+# Port d'écoute syslog à ouvrir sur le pare-feu de la VM agent.
+otel_profile_firewall_ports:
+  - {port: 5515, proto: udp}   # syslog/virt (DCS, consoles hardware)

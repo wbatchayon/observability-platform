@@ -1,5 +1,6 @@
 ---
 # Variables communes - surface de configuration des agents (par environnement).
+# (Les secrets sont dans vault.yaml, chiffré via SOPS — cf. .sops.yaml.)
 environment_name: _template
 
 # Dépôt interne (output de bootstrap/30-package-repo). Les VMs sont air-gap.
@@ -9,7 +10,7 @@ otel_version: "0.148.0"
 # Endpoint de l'Edge Collector du DC (exposé via ingress/). Export OTLP/gRPC mTLS.
 edge_collector_endpoint: "otlp.observability.internal:4317"
 
-# Certificats mTLS de l'agent (fournis via ansible-vault / SOPS, jamais en clair).
+# Certificats mTLS de l'agent (fournis via vault.yaml / SOPS, jamais en clair).
 otel_tls_ca: "{{ vault_otel_tls_ca }}"
 otel_tls_cert: "{{ vault_otel_tls_cert }}"
 otel_tls_key: "{{ vault_otel_tls_key }}"

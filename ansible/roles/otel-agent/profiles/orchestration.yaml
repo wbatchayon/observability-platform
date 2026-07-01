@@ -1,0 +1,291 @@
+---
+# =============================================================================
+# Profil OTel Collector (otelcol-contrib) — Domaine ORCHESTRATION (Cloud / DevOps)
+# =============================================================================
+# Chargé par roles/otel-agent (include_vars) quand otel_profile == "orchestration".
+# N'ajoute QUE des receivers métier : le socle (hostmetrics, filelog générique,
+# filelog/security, journald, otlp mTLS, attributs team/domain/criticality/
+# retention_class) est déjà géré par le template config.yaml.j2.
+#
+# Technos couvertes : SaltStack, Ansible, Nexus, SUSE, ArgoCD, Harbor,
+# OpenBao (API/Agent).
+# Besoins : Besoins détaillé.xlsx (feuille Orchestration) + Besoin_securité.xlsx
+# (Container Orchestration, Secret, Image Registry, IaC, Runbook automation,
+# CD Tools, CSPM).
+#
+# Voie principale des métriques : endpoints Prometheus /metrics des outils
+# (receiver `prometheus` du contrib), un scrape_config par outil.
+# Voie principale des traces : receiver otlp du SOCLE (applis instrumentées qui
+# poussent en OTLP) -> otel_profile_traces_receivers volontairement VIDE.
+#
+# NB : toute valeur contenant du Jinja ({{ vault_* }}) est résolue à la
+# génération (templating récursif Ansible). Les cibles/secrets viennent du vault.
+# =============================================================================
+
+# --- Enrichissement « profil piloté par donnée » (colonnes des besoins) --------
+otel_team: "Orchestration (Cloud)"
+otel_domain: "orchestration"
+otel_criticality: "medium"
+otel_retention_class: "short"        # feuille client : rétention 30 jours
+
+# Ressources par processus (Top process CPU/RAM par outil — feuille Orchestration).
+# Le scraper `process` du socle hostmetrics est activé par ce flag.
+otel_collect_process_metrics: true
+
+# =============================================================================
+# RECEIVERS MÉTIER (injectés tels quels dans otelcol-contrib par le template)
+# =============================================================================
+otel_profile_receivers:
+
+  # ---------------------------------------------------------------------------
+  # MÉTRIQUES — un scrape Prometheus par outil (Besoins : santé pods/instances,
+  # statut déploiements, RPS, temps de réponse API P90/P99, taux d'erreur HTTP,
+  # perf BDD, frameworks JVM/Node…). Cibles et jetons via variables vault.
+  # ---------------------------------------------------------------------------
+
+  # ArgoCD (CD Tools) : statut des déploiements, santé des applications,
+  # sync/OutOfSync, latence des reconciliations. Endpoints /metrics des
+  # services argocd-*-metrics.
+  prometheus/argocd:
+    config:
+      scrape_configs:
+        - job_name: argocd
+          scrape_interval: 30s
+          metrics_path: /metrics
+          static_configs:
+            - targets: "{{ vault_orch_argocd_targets }}"
+
+  # Harbor (Image Registry) : santé des composants (core/registry/jobservice),
+  # quotas, opérations push/pull, scans. Exporter Harbor /metrics (port 9090).
+  prometheus/harbor:
+    config:
+      scrape_configs:
+        - job_name: harbor
+          scrape_interval: 30s
+          metrics_path: /metrics
+          static_configs:
+            - targets: "{{ vault_orch_harbor_targets }}"
+
+  # Nexus (Image/Artifact Registry) : santé, stockage des blobstores, requêtes.
+  # Endpoint natif /service/metrics/prometheus protégé par authentification.
+  prometheus/nexus:
+    config:
+      scrape_configs:
+        - job_name: nexus
+          scrape_interval: 30s
+          metrics_path: /service/metrics/prometheus
+          basic_auth:
+            username: "{{ vault_orch_nexus_metrics_user }}"
+            password: "{{ vault_orch_nexus_metrics_password }}"
+          static_configs:
+            - targets: "{{ vault_orch_nexus_targets }}"
+
+  # OpenBao / Vault (Secret Manager) : santé du secret engine, seal status,
+  # requêtes token/lease, latences. Vault expose /v1/sys/metrics au format
+  # Prometheus (paramètre format=prometheus), authentifié par jeton.
+  prometheus/openbao:
+    config:
+      scrape_configs:
+        - job_name: openbao
+          scrape_interval: 30s
+          scheme: https
+          metrics_path: /v1/sys/metrics
+          params:
+            format: [prometheus]
+          bearer_token: "{{ vault_orch_openbao_metrics_token }}"
+          tls_config:
+            ca_file: "{{ vault_orch_openbao_ca_file | default('/etc/otelcol-contrib/tls/ca.crt') }}"
+          static_configs:
+            - targets: "{{ vault_orch_openbao_targets }}"
+
+  # SaltStack (Runbook automation) : état des minions, jobs, retours de commande.
+  # Nécessite un exporter Prometheus dédié (ex. salt-exporter). Si absent,
+  # désactiver ce receiver et retirer prometheus/saltstack de la liste plus bas.
+  prometheus/saltstack:
+    config:
+      scrape_configs:
+        - job_name: saltstack
+          scrape_interval: 30s
+          metrics_path: /metrics
+          static_configs:
+            - targets: "{{ vault_orch_saltstack_targets }}"
+
+  # Frameworks applicatifs (JVM / Node.js) exposant Prometheus (Micrometer
+  # /actuator/prometheus pour Spring, prom-client /metrics pour Node) : GC, heap,
+  # threads, event-loop, ainsi que temps de réponse API (histogrammes P90/P99),
+  # RPS et taux d'erreur HTTP 4xx/5xx, perf requêtes BDD si exposés.
+  # NB : les applis déjà instrumentées OpenTelemetry poussent ces métriques (et
+  # les traces) en OTLP via le receiver otlp du SOCLE — ce scrape ne concerne
+  # que celles qui n'exposent QUE du Prometheus. RUM (FCP/LCP/INP) : remonté par
+  # le SDK navigateur en OTLP -> socle (pas de source Prometheus locale ici).
+  prometheus/app-frameworks:
+    config:
+      scrape_configs:
+        - job_name: app-frameworks-jvm-node
+          scrape_interval: 30s
+          metrics_path: /actuator/prometheus   # Node/prom-client : surcharger en /metrics
+          static_configs:
+            - targets: "{{ vault_orch_app_metrics_targets }}"
+
+  # Sondes réseau/services via blackbox_exporter (état DNS / NTP / LDAP, temps de
+  # réponse API bout-en-bout, trafic réseau applicatif) — aucune de ces cibles
+  # n'expose nativement Prometheus. On scrape /probe de l'exporter et on relabel
+  # la vraie cible en __param_target.
+  # TODO : dupliquer le job par module (dns_udp, ntp, ldap/tcp_connect, http_2xx,
+  # icmp) selon la config du blackbox_exporter ; ici un module générique par vault.
+  prometheus/blackbox:
+    config:
+      scrape_configs:
+        - job_name: blackbox-services
+          scrape_interval: 30s
+          metrics_path: /probe
+          params:
+            module: ["{{ vault_orch_blackbox_module | default('icmp') }}"]
+          static_configs:
+            - targets: "{{ vault_orch_blackbox_targets }}"
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: "{{ vault_orch_blackbox_exporter }}"
+
+  # ---------------------------------------------------------------------------
+  # LOGS — audit sécurité des outils d'orchestration + logs applicatifs/métier.
+  # Tous : start_at=end, storage=file_storage. Les audits sont tagués
+  # log.category=security pour le routage/rétention et la détection en aval
+  # (Besoin_securité.xlsx). Logs métier tagués log.category=business.
+  # ---------------------------------------------------------------------------
+
+  # OpenBao / Vault — AUDIT DEVICE (fichier JSON). Détection (catégorie Secret) :
+  # accès échoué / lecture massive de secrets, révocations, et — via l'absence de
+  # nouvelles lignes ou un event dédié — désactivation de l'audit du Secret Manager.
+  filelog/openbao-audit:
+    include:
+      - "{{ vault_orch_openbao_audit_path | default('/var/log/openbao/audit.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: json_parser
+        parse_from: body
+      - type: add
+        field: resource["log.category"]
+        value: security
+      - type: add
+        field: resource["log.tech"]
+        value: openbao
+
+  # Harbor — logs d'audit du registry (catégorie Image Registry). Détection :
+  # push forcé / écrasement de tag (tag overwrite), ajout d'un administrateur,
+  # suppression de dépôt.
+  filelog/harbor-audit:
+    include:
+      - "{{ vault_orch_harbor_audit_path | default('/var/log/harbor/audit.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
+      - type: add
+        field: resource["log.tech"]
+        value: harbor
+
+  # ArgoCD — logs applicatifs/audit (catégorie CD Tools). Détection : bypass de
+  # gate manuel (sync forcé), suppression d'historique de déploiement, changements
+  # de projet/RBAC. ArgoCD logue généralement sur stdout (K8s) : soit un fichier
+  # exporté par le runtime, soit collecté via un sidecar. Adapter le chemin vault.
+  filelog/argocd-audit:
+    include:
+      - "{{ vault_orch_argocd_log_path | default('/var/log/argocd/argocd.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
+      - type: add
+        field: resource["log.tech"]
+        value: argocd
+
+  # Moteurs d'automatisation SaltStack / Ansible (catégories Runbook automation
+  # + IaC). Détection : désactivation des notifications/logs du moteur, exécutions
+  # anormales ; côté IaC (via ces logs d'orchestration) : push exposant des
+  # ressources publiques, terraform destroy forcé.
+  filelog/automation-audit:
+    include:
+      - "{{ vault_orch_salt_log_path | default('/var/log/salt/master') }}"
+      - "{{ vault_orch_salt_minion_log_path | default('/var/log/salt/minion') }}"
+      - "{{ vault_orch_ansible_log_path | default('/var/log/ansible/ansible.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
+      - type: add
+        field: resource["log.tech"]
+        value: automation
+
+  # Audit du plan de contrôle Kubernetes (catégorie Container Orchestration) —
+  # UNIQUEMENT sur les hôtes control-plane. Détection : escalade RBAC, pods
+  # privilégiés, kubectl exec atypique, modification de Secrets/ConfigMaps.
+  # TODO : ne brancher que sur les nœuds control-plane (conditionner via group_vars).
+  filelog/k8s-audit:
+    include:
+      - "{{ vault_orch_k8s_audit_path | default('/var/log/kubernetes/audit.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: json_parser
+        parse_from: body
+      - type: add
+        field: resource["log.category"]
+        value: security
+      - type: add
+        field: resource["log.tech"]
+        value: kubernetes
+
+  # Logs applicatifs et logs MÉTIER des applications d'orchestration
+  # (acheminement centralisé). Tagués log.category=business ; le trafic anormal /
+  # flux suspects / logs de connexion à vocation sécurité restent captés par le
+  # filelog/security du socle (auth.log, audit.d…) et les audits ci-dessus.
+  filelog/apps-business:
+    include:
+      - "{{ vault_orch_business_log_glob | default('/var/log/apps/**/*.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: business
+
+# =============================================================================
+# BRANCHEMENT DES RECEIVERS AUX PIPELINES DU SOCLE
+# =============================================================================
+otel_profile_metrics_receivers:
+  - prometheus/argocd
+  - prometheus/harbor
+  - prometheus/nexus
+  - prometheus/openbao
+  - prometheus/saltstack        # retirer si pas d'exporter Salt déployé
+  - prometheus/app-frameworks
+  - prometheus/blackbox
+
+otel_profile_logs_receivers:
+  - filelog/openbao-audit
+  - filelog/harbor-audit
+  - filelog/argocd-audit
+  - filelog/automation-audit
+  - filelog/k8s-audit           # control-plane uniquement (cf. TODO)
+  - filelog/apps-business
+
+# Traces : déjà couvertes par le receiver otlp du SOCLE — les applications
+# instrumentées OpenTelemetry poussent leurs traces distribuées (temps de réponse
+# bout-en-bout) en OTLP/gRPC mTLS. Aucun receiver de traces spécifique au profil.
+otel_profile_traces_receivers: []
+
+# --- Attributs additionnels attachés à toute la télémétrie du profil -----------
+otel_profile_resource_attributes:
+  - {key: "service.namespace", value: "orchestration", action: upsert}

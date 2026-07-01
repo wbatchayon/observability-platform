@@ -1,4 +1,8 @@
 ---
+- name: Charger le profil d'équipe (receivers/logs métier — Besoins détaillé.xlsx)
+  ansible.builtin.include_vars: "{{ role_path }}/profiles/{{ otel_profile }}.yaml"
+  when: otel_profile is defined and (otel_profile | length > 0)
+
 - name: Installer l'agent (Debian/Ubuntu)
   ansible.builtin.include_tasks: install-debian.yaml
   when: ansible_facts['os_family'] == "Debian"

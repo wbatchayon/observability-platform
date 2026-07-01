@@ -1,0 +1,39 @@
+---
+# Exemple d'attributs CMDB par hôte. Copier en <hôte>.yaml (sans .example) et renseigner,
+# OU laisser un mécanisme de synchronisation CMDB générer ces fichiers (voir README.md).
+#
+# Tout ce qui est ici est attaché en resource attributes à TOUTE la télémétrie de l'hôte
+# (métriques, logs, traces) → recherche et corrélation directes dans Grafana :
+# "à qui appartient cette machine ?", "quel code appli ?", "qui est d'astreinte ?", etc.
+
+otel_cmdb_attributes:
+  # --- Identité de la CI (Configuration Item) ---
+  cmdb.ci_id: "CI0001234"              # identifiant unique CMDB
+  cmdb.ci_name: "vm-debian-01"
+  cmdb.lifecycle: "production"         # production | staging | retiring…
+
+  # --- Rattachement applicatif / métier ---
+  app.code: "APP042"                   # code application (référentiel)
+  app.name: "Facturation"
+  service.name: "facturation-api"      # semconv OTel (corrélation traces/logs)
+  business.criticality: "P1"           # P1..P4 / Critique..Faible
+
+  # --- Propriété & support ---
+  cmdb.owner: "jean.dupont"
+  cmdb.support_group: "DBA-Prod"
+  cmdb.entity: "Direction SI"
+
+  # --- Localisation ---
+  cmdb.datacenter: "DC-Paris-1"
+  cmdb.zone: "IZ-A"
+  cmdb.region: "eu-fr"
+
+  # --- Astreinte (voir README : le nom de l'astreinte VIVANTE est résolu en aval) ---
+  oncall.team: "astreinte-dba"         # équipe/rotation d'astreinte (stable)
+  oncall.schedule_url: "https://oncall.internal/schedules/dba"
+
+  # --- FinOps ---
+  cost_center: "CC-4711"
+
+# (Optionnel) surcharges de profil propres à cet hôte, ex. moteur DB unique :
+# otel_db_system: postgresql
