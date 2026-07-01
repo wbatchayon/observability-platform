@@ -23,7 +23,19 @@ Dépôt interne (apt/yum/tar.gz) ──install offline──▶ Agent OTel sur V
 ## Variables clés (`inventories/<env>/group_vars/all.yaml`)
 
 `package_repo_url`, `otel_version` (0.148.0), `edge_collector_endpoint`, certificats mTLS
-(`vault_otel_tls_*` via ansible-vault/SOPS - jamais en clair).
+(`vault_otel_tls_*` via ansible-vault/SOPS - jamais en clair). Ports du receiver OTLP ouverts
+sur le pare-feu de la VM : `otel_otlp_ports` (4317/4318), désactivable via `otel_open_firewall: false`.
+
+### Certificat de l'agent (exigences d'émission)
+
+Le receiver OTLP local écoute en **mTLS sur `0.0.0.0:4317/4318`** : l'agent est à la fois
+**client** (export vers l'edge) et **serveur** (réception des applis/conteneurs). Le certificat
+émis par la **PKI Vault** (`pki_int/sign/observability`) et injecté dans `vault_otel_tls_cert`
+doit donc porter :
+
+- EKU **`server auth` + `client auth`** (comme les certifs edge/gateway, cf. `platform/ingestion/certificate.yaml`) ;
+- des **SAN** correspondant à l'adressage des clients : hostname **et/ou IP** de la VM
+  (`dnsNames` / `ipAddresses`), sinon la vérification TLS échoue côté client.
 
 ## Utilisation
 

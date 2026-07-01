@@ -5,3 +5,8 @@ otel_tls_dir_linux: /etc/otelcol-contrib/tls
 otel_tls_dir_windows: C:\ProgramData\otelcol-contrib\tls
 otel_service_name_linux: otelcol-contrib
 otel_service_name_windows: otelcol-contrib
+# Receiver OTLP exposé sur le réseau (mTLS) : ports à ouvrir sur le pare-feu de la VM.
+otel_open_firewall: true
+otel_otlp_ports:
+  - 4317
+  - 4318

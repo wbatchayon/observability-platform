@@ -1,0 +1,33 @@
+---
+# Ouverture des ports du receiver OTLP (mTLS) sur le pare-feu de la VM.
+# Multi-OS : firewalld (RHEL), ufw (Debian), pare-feu Windows.
+- name: Ouvrir les ports OTLP via firewalld (RHEL/CentOS)
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ otel_otlp_ports }}"
+  become: true
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Ouvrir les ports OTLP via ufw (Debian/Ubuntu)
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ otel_otlp_ports }}"
+  become: true
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Ouvrir les ports OTLP dans le pare-feu Windows
+  community.windows.win_firewall_rule:
+    name: "OpenTelemetry OTLP {{ item }}"
+    localport: "{{ item }}"
+    action: allow
+    direction: in
+    protocol: tcp
+    enabled: true
+    state: present
+  loop: "{{ otel_otlp_ports }}"
+  when: ansible_facts['os_family'] == "Windows"

@@ -2,8 +2,16 @@
 
 ## Télémétrie (collecte → stockage → visualisation)
 
-1. L'**agent OTel** (VM) collecte métriques (hostmetrics), logs (filelog/journald/windowseventlog)
-   et exporte en **OTLP/gRPC mTLS** vers l'**Edge Collector** de son DC.
+1. L'**agent OTel** (VM) collecte métriques (hostmetrics : cpu/mem/disk/fs/net/load/paging/processes
+   + auto-télémétrie du collector), logs (filelog/journald/windowseventlog application+system) et
+   **traces/métriques/logs applicatifs** via un receiver OTLP exposé sur le réseau (0.0.0.0:4317/4318)
+   en **mTLS** (mêmes certifs PKI que l'export : tout client doit présenter un cert signé par la CA interne).
+   Offsets de lecture persistés (file_storage) pour ne rien perdre au redémarrage, et filtre
+   anti-boucle pour ne pas réingérer ses propres logs. Il exporte en **OTLP/gRPC mTLS** vers
+   l'**Edge Collector** de son DC.
+   > Le durcissement systemd (LimitNOFILE, Restart) passe par un **drop-in**
+   > `otelcol-contrib.service.d/override.conf` — l'unité packagée n'est jamais éditée (elle serait
+   > écrasée au prochain upgrade du package).
 2. L'**Edge Collector** bufferise (file persistante), filtre, **compresse (gzip)** et exporte en
    OTLP/gRPC mTLS via l'**ingress HAProxy** (terminaison TLS) vers l'**OTel Gateway**.
 3. Le **Gateway (x3)** applique le pipeline : `memory_limiter → filter → resource/attributes

@@ -1,0 +1,11 @@
+# Drop-in systemd géré par Ansible — NE PAS éditer l'unité packagée otelcol-contrib.service :
+# toute modif directe de l'unité serait écrasée au prochain upgrade du package.
+# Ce drop-in, lui, survit aux mises à jour.
+[Service]
+# filelog surveille de nombreux fichiers de logs : relever la limite de descripteurs.
+LimitNOFILE=65536
+# Redémarrage systématique en cas d'arrêt inopiné (la file persistante évite la perte).
+Restart=always
+RestartSec=5
+# Les logs du collector restent dans journald (défaut du package) — pas de StandardOutput
+# vers un fichier, pour éviter que filelog les réingère (voir filter/self dans config.yaml).
