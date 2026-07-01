@@ -1,0 +1,14 @@
+---
+# Équipe Storage → profil "storage" (SNMP baie + syslog).
+otel_profile: storage
+
+# Endpoint SNMP de la baie (OceanStor/eDME) :
+vault_snmp_storage_host: "udp://10.0.0.0:161"
+
+# Secrets SNMP v3 via group_vars/all/vault.yaml :
+#   vault_snmp_storage_user/auth_password/priv_password
+#
+# (TODO API eDME) si un exporter Prometheus est déployé (perf fines) :
+# vault_edme_metrics_endpoint: "edme-exporter.observability.internal:9103"
+#
+# Ports syslog ouverts automatiquement par le profil (5516/tcp+udp).
