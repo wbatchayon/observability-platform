@@ -1,0 +1,450 @@
+---
+# =============================================================================
+# Profil OpenTelemetry — Domaine BASES DE DONNÉES (mode Agent : l'otelcol tourne
+# sur l'hôte DB). Injecté par le template config.yaml.j2 SANS toucher au socle
+# (hostmetrics OS, filelog générique, otlp mTLS, logs sécurité OS… déjà gérés).
+#
+# Couvre Besoins détaillé.xlsx (feuille Database) + Besoin_securité.xlsx
+# (catégories Database + Secret). Technologies : Oracle, MySQL, PostgreSQL, MSSQL.
+#
+# NOTE MULTI-MOTEUR : les 4 instances sqlquery/* et les filelog/db-* sont définies
+# ici pour couvrir tout le parc. Sur un hôte donné, ne garder que le moteur présent
+# en surchargeant otel_profile_metrics_receivers / otel_profile_logs_receivers dans
+# les group_vars de l'hôte (sinon les receivers des moteurs absents lèveront des
+# erreurs de connexion). Les DSN sont fournis par Vault (voir group_vars/vault).
+# =============================================================================
+
+otel_team: "Database"
+otel_domain: "database"
+otel_criticality: "high"            # db.status / storage / replication = Critique
+otel_retention_class: "standard"    # standard par défaut ; logs sécurité DB = 1 an
+                                    # via log.category=security (routage Gateway aval)
+
+# db.system : à surcharger par hôte (oracle|mysql|postgresql|mssql) dans group_vars.
+otel_profile_resource_attributes:
+  - {key: db.system, value: "{{ otel_db_system | default('multi') }}", action: upsert}
+
+# --- Receivers branchés aux pipelines (auto-câblés par le template) ---
+otel_profile_metrics_receivers:
+  - sqlquery/oracle
+  - sqlquery/mysql
+  - sqlquery/postgresql
+  - sqlquery/mssql
+otel_profile_logs_receivers:
+  - filelog/db-oracle
+  - filelog/db-oracle-audit
+  - filelog/db-mysql
+  - filelog/db-mysql-audit
+  - filelog/db-postgresql
+  - filelog/db-mssql
+otel_profile_traces_receivers: []   # pas d'instrumentation trace côté agent DB
+
+# =============================================================================
+# RECEIVERS MÉTIER
+# =============================================================================
+otel_profile_receivers:
+
+  # ---------------------------------------------------------------------------
+  # ORACLE — driver godror. DSN Vault : "oracle://user:pass@host:1521/SERVICE".
+  # ---------------------------------------------------------------------------
+  sqlquery/oracle:
+    driver: oracle
+    datasource: "{{ vault_db_oracle_dsn }}"   # SECRET — fourni via Vault/group_vars
+    collection_interval: 60s
+    queries:
+      # db.status (Critique) — une remontée = connexion OK.
+      - sql: "SELECT 1 AS db_status FROM dual"
+        metrics:
+          - metric_name: db.status
+            value_column: "db_status"
+            value_type: int
+            data_point_type: gauge
+            description: "Accessibilite/disponibilite de l'instance (1=up)"
+      # db.connections.active (Moyenne)
+      - sql: "SELECT COUNT(*) AS active_sessions FROM v$session WHERE status = 'ACTIVE'"
+        metrics:
+          - metric_name: db.connections.active
+            value_column: "active_sessions"
+            value_type: int
+            data_point_type: gauge
+            unit: "{connections}"
+      # db.query.latency (Élevée) — temps moyen d'exécution (secondes).
+      - sql: "SELECT ROUND(SUM(elapsed_time) / (1000000 * NULLIF(SUM(executions),0)), 4) AS avg_latency_s FROM v$sql WHERE executions > 0"
+        metrics:
+          - metric_name: db.query.latency
+            value_column: "avg_latency_s"
+            value_type: double
+            data_point_type: gauge
+            unit: "s"
+      # db.cache.hit_ratio (Moyenne) — buffer cache hit ratio (%).
+      - sql: "SELECT ROUND((1 - (phy.value / (cur.value + con.value))) * 100, 2) AS cache_hit_ratio FROM v$sysstat cur, v$sysstat con, v$sysstat phy WHERE cur.name = 'db block gets' AND con.name = 'consistent gets' AND phy.name = 'physical reads'"
+        metrics:
+          - metric_name: db.cache.hit_ratio
+            value_column: "cache_hit_ratio"
+            value_type: double
+            data_point_type: gauge
+            unit: "%"
+      # db.storage.data_utilization (Critique) — % d'occupation des tablespaces.
+      - sql: "SELECT ROUND(MAX(used_percent), 2) AS data_utilization FROM dba_tablespace_usage_metrics"
+        metrics:
+          - metric_name: db.storage.data_utilization
+            value_column: "data_utilization"
+            value_type: double
+            data_point_type: gauge
+            unit: "%"
+      # db.replication.lag (Critique) — Data Guard apply lag (secondes). Aucune
+      # ligne renvoyee si l'instance n'est pas un standby (metrique simplement absente).
+      - sql: "SELECT ROUND((EXTRACT(DAY FROM lag) * 86400) + (EXTRACT(HOUR FROM lag) * 3600) + (EXTRACT(MINUTE FROM lag) * 60) + EXTRACT(SECOND FROM lag), 0) AS replication_lag FROM (SELECT TO_DSINTERVAL(value) AS lag FROM v$dataguard_stats WHERE name = 'apply lag')"
+        metrics:
+          - metric_name: db.replication.lag
+            value_column: "replication_lag"
+            value_type: double
+            data_point_type: gauge
+            unit: "s"
+      # db.backup.status (Élevée) — dernier job RMAN (1=COMPLETED, 0=sinon).
+      - sql: "SELECT CASE WHEN status = 'COMPLETED' THEN 1 ELSE 0 END AS backup_status FROM (SELECT status FROM v$rman_backup_job_details ORDER BY end_time DESC) WHERE ROWNUM = 1"
+        metrics:
+          - metric_name: db.backup.status
+            value_column: "backup_status"
+            value_type: int
+            data_point_type: gauge
+            description: "Statut du dernier backup RMAN (1=OK)"
+
+  # ---------------------------------------------------------------------------
+  # MYSQL — driver mysql. DSN Vault : "user:pass@tcp(host:3306)/". performance_schema
+  # doit etre actif pour la latence/le hit ratio.
+  # ---------------------------------------------------------------------------
+  sqlquery/mysql:
+    driver: mysql
+    datasource: "{{ vault_db_mysql_dsn }}"    # SECRET — fourni via Vault/group_vars
+    collection_interval: 60s
+    queries:
+      # db.status (Critique)
+      - sql: "SELECT 1 AS db_status"
+        metrics:
+          - metric_name: db.status
+            value_column: "db_status"
+            value_type: int
+            data_point_type: gauge
+            description: "Accessibilite de l'instance (1=up)"
+      # db.connections.active (Moyenne) — Threads_running (requetes actives).
+      - sql: "SELECT VARIABLE_VALUE AS active_connections FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Threads_running'"
+        metrics:
+          - metric_name: db.connections.active
+            value_column: "active_connections"
+            value_type: int
+            data_point_type: gauge
+            unit: "{connections}"
+      # db.query.latency (Élevée) — latence moyenne toutes requetes (secondes).
+      - sql: "SELECT ROUND(SUM(SUM_TIMER_WAIT) / (NULLIF(SUM(COUNT_STAR),0) * 1000000000000), 6) AS avg_latency_s FROM performance_schema.events_statements_summary_global_by_event_name WHERE COUNT_STAR > 0"
+        metrics:
+          - metric_name: db.query.latency
+            value_column: "avg_latency_s"
+            value_type: double
+            data_point_type: gauge
+            unit: "s"
+      # db.cache.hit_ratio (Moyenne) — InnoDB buffer pool hit ratio (%).
+      - sql: "SELECT ROUND((1 - (r.VARIABLE_VALUE / NULLIF(rr.VARIABLE_VALUE,0))) * 100, 2) AS cache_hit_ratio FROM performance_schema.global_status r JOIN performance_schema.global_status rr ON rr.VARIABLE_NAME = 'Innodb_buffer_pool_read_requests' WHERE r.VARIABLE_NAME = 'Innodb_buffer_pool_reads'"
+        metrics:
+          - metric_name: db.cache.hit_ratio
+            value_column: "cache_hit_ratio"
+            value_type: double
+            data_point_type: gauge
+            unit: "%"
+      # db.storage.data_utilization (Critique) — taille totale data+index (octets).
+      # NB : MySQL/InnoDB n'a pas de plafond de datafile ; le % d'occupation reel du
+      # volume de donnees est fourni par le scraper hostmetrics/filesystem (socle).
+      - sql: "SELECT SUM(data_length + index_length) AS data_bytes FROM information_schema.tables WHERE table_schema NOT IN ('information_schema','performance_schema','mysql','sys')"
+        metrics:
+          - metric_name: db.storage.data_utilization
+            value_column: "data_bytes"
+            value_type: int
+            data_point_type: gauge
+            unit: "By"
+            description: "Taille des donnees (octets) ; % volume via hostmetrics"
+      # db.replication.lag (Critique) — Seconds_Behind_Master (0/NULL si non replica).
+      - sql: "SHOW SLAVE STATUS"
+        metrics:
+          - metric_name: db.replication.lag
+            value_column: "Seconds_Behind_Master"
+            value_type: int
+            data_point_type: gauge
+            unit: "s"
+      # db.backup.status (Élevée) : MySQL n'expose PAS de catalogue de backup natif
+      # (mysqldump/xtrabackup sont externes). Couvert par filelog/db-mysql sur le log
+      # de l'outil de sauvegarde, PAS par une metrique sqlquery. Cf. resume.
+
+  # ---------------------------------------------------------------------------
+  # POSTGRESQL — driver postgres. DSN Vault :
+  # "host=... port=5432 user=... password=... dbname=... sslmode=require".
+  # La latence requiert l'extension pg_stat_statements.
+  # ---------------------------------------------------------------------------
+  sqlquery/postgresql:
+    driver: postgres
+    datasource: "{{ vault_db_postgresql_dsn }}"   # SECRET — fourni via Vault/group_vars
+    collection_interval: 60s
+    queries:
+      # db.status (Critique)
+      - sql: "SELECT 1 AS db_status"
+        metrics:
+          - metric_name: db.status
+            value_column: "db_status"
+            value_type: int
+            data_point_type: gauge
+            description: "Accessibilite de l'instance (1=up)"
+      # db.connections.active (Moyenne)
+      - sql: "SELECT count(*) AS active_connections FROM pg_stat_activity WHERE state = 'active'"
+        metrics:
+          - metric_name: db.connections.active
+            value_column: "active_connections"
+            value_type: int
+            data_point_type: gauge
+            unit: "{connections}"
+      # db.query.latency (Élevée) — temps moyen d'exec (ms) via pg_stat_statements.
+      - sql: "SELECT ROUND(AVG(mean_exec_time)::numeric, 3) AS avg_latency_ms FROM pg_stat_statements"
+        metrics:
+          - metric_name: db.query.latency
+            value_column: "avg_latency_ms"
+            value_type: double
+            data_point_type: gauge
+            unit: "ms"
+      # db.cache.hit_ratio (Moyenne) — ratio blocs en cache (%).
+      - sql: "SELECT ROUND(sum(blks_hit) * 100.0 / NULLIF(sum(blks_hit) + sum(blks_read), 0), 2) AS cache_hit_ratio FROM pg_stat_database"
+        metrics:
+          - metric_name: db.cache.hit_ratio
+            value_column: "cache_hit_ratio"
+            value_type: double
+            data_point_type: gauge
+            unit: "%"
+      # db.storage.data_utilization (Critique) — taille de la base (octets).
+      # NB : PostgreSQL croit avec le systeme de fichiers ; le % d'occupation du
+      # volume de donnees provient du scraper hostmetrics/filesystem (socle).
+      - sql: "SELECT pg_database_size(current_database()) AS data_bytes"
+        metrics:
+          - metric_name: db.storage.data_utilization
+            value_column: "data_bytes"
+            value_type: int
+            data_point_type: gauge
+            unit: "By"
+            description: "Taille de la base (octets) ; % volume via hostmetrics"
+      # db.replication.lag (Critique) — retard d'application sur le primaire (secondes).
+      # Aucune ligne si pas de standby connecte.
+      - sql: "SELECT COALESCE(EXTRACT(EPOCH FROM max(replay_lag)), 0) AS replication_lag FROM pg_stat_replication"
+        metrics:
+          - metric_name: db.replication.lag
+            value_column: "replication_lag"
+            value_type: double
+            data_point_type: gauge
+            unit: "s"
+      # db.backup.status (Élevée) — age du dernier checkpoint/backup base (secondes).
+      # pg_stat_archiver : dernier WAL archive avec succes (proxy de continuite de backup).
+      - sql: "SELECT COALESCE(EXTRACT(EPOCH FROM (now() - last_archived_time)), -1) AS backup_age_s FROM pg_stat_archiver"
+        metrics:
+          - metric_name: db.backup.status
+            value_column: "backup_age_s"
+            value_type: double
+            data_point_type: gauge
+            unit: "s"
+            description: "Age du dernier WAL archive (s) ; -1 si jamais"
+
+  # ---------------------------------------------------------------------------
+  # MSSQL — driver sqlserver. DSN Vault :
+  # "sqlserver://user:pass@host:1433?database=master".
+  # ---------------------------------------------------------------------------
+  sqlquery/mssql:
+    driver: sqlserver
+    datasource: "{{ vault_db_mssql_dsn }}"    # SECRET — fourni via Vault/group_vars
+    collection_interval: 60s
+    queries:
+      # db.status (Critique)
+      - sql: "SELECT 1 AS db_status"
+        metrics:
+          - metric_name: db.status
+            value_column: "db_status"
+            value_type: int
+            data_point_type: gauge
+            description: "Accessibilite de l'instance (1=up)"
+      # db.connections.active (Moyenne)
+      - sql: "SELECT COUNT(*) AS active_connections FROM sys.dm_exec_sessions WHERE status = 'running' AND is_user_process = 1"
+        metrics:
+          - metric_name: db.connections.active
+            value_column: "active_connections"
+            value_type: int
+            data_point_type: gauge
+            unit: "{connections}"
+      # db.query.latency (Élevée) — temps moyen ecoule par execution (ms).
+      - sql: "SELECT ISNULL(ROUND(SUM(total_elapsed_time) / (1000.0 * NULLIF(SUM(execution_count),0)), 3), 0) AS avg_latency_ms FROM sys.dm_exec_query_stats"
+        metrics:
+          - metric_name: db.query.latency
+            value_column: "avg_latency_ms"
+            value_type: double
+            data_point_type: gauge
+            unit: "ms"
+      # db.cache.hit_ratio (Moyenne) — Buffer cache hit ratio (%).
+      - sql: "SELECT ROUND(a.cntr_value * 100.0 / NULLIF(b.cntr_value, 0), 2) AS cache_hit_ratio FROM sys.dm_os_performance_counters a JOIN sys.dm_os_performance_counters b ON b.counter_name = 'Buffer cache hit ratio base' WHERE a.counter_name = 'Buffer cache hit ratio'"
+        metrics:
+          - metric_name: db.cache.hit_ratio
+            value_column: "cache_hit_ratio"
+            value_type: double
+            data_point_type: gauge
+            unit: "%"
+      # db.storage.data_utilization (Critique) — % d'occupation des fichiers de donnees
+      # (ROWS) par rapport a leur taille allouee.
+      - sql: "SELECT ROUND(SUM(CAST(FILEPROPERTY(name, 'SpaceUsed') AS bigint)) * 100.0 / NULLIF(SUM(CAST(size AS bigint)), 0), 2) AS data_utilization FROM sys.database_files WHERE type_desc = 'ROWS'"
+        metrics:
+          - metric_name: db.storage.data_utilization
+            value_column: "data_utilization"
+            value_type: double
+            data_point_type: gauge
+            unit: "%"
+      # db.replication.lag (Critique) — Always On : retard secondaire (secondes).
+      - sql: "SELECT ISNULL(MAX(DATEDIFF(SECOND, last_commit_time, GETDATE())), 0) AS replication_lag FROM sys.dm_hadr_database_replica_states WHERE is_local = 0"
+        metrics:
+          - metric_name: db.replication.lag
+            value_column: "replication_lag"
+            value_type: int
+            data_point_type: gauge
+            unit: "s"
+      # db.backup.status (Élevée) — age (heures) de la derniere sauvegarde FULL.
+      - sql: "SELECT ISNULL(DATEDIFF(HOUR, MAX(backup_finish_date), GETDATE()), -1) AS backup_age_h FROM msdb.dbo.backupset WHERE type = 'D'"
+        metrics:
+          - metric_name: db.backup.status
+            value_column: "backup_age_h"
+            value_type: int
+            data_point_type: gauge
+            unit: "h"
+            description: "Age du dernier backup FULL (heures) ; -1 si aucun"
+
+  # ===========================================================================
+  # LOGS DB — filelog dedies (start_at:end, offsets persistes via file_storage).
+  # db.log.error (Critique), db.log.slow_query (Élevée), db.log.security (Élevée,
+  # retention 1 an → log.category=security, applique en aval par la Gateway).
+  # ===========================================================================
+
+  # --- ORACLE : alert.log (erreurs ORA-)  ---
+  filelog/db-oracle:
+    include:
+      - /opt/oracle/diag/rdbms/*/*/trace/alert_*.log   # adapter ORACLE_BASE si besoin
+      - /u01/app/oracle/diag/rdbms/*/*/trace/alert_*.log
+    start_at: end
+    storage: file_storage
+    operators:
+      # db.log.error (Critique) — tag les erreurs ORA-xxxxx.
+      - type: add
+        field: attributes["log.type"]
+        value: error
+        if: 'body matches "ORA-[0-9]+"'
+      - type: add
+        field: attributes["db.system"]
+        value: oracle
+
+  # --- ORACLE : piste d'audit (adump) — db.log.security ---
+  filelog/db-oracle-audit:
+    include:
+      - /opt/oracle/admin/*/adump/*.aud
+      - /u01/app/oracle/admin/*/adump/*.aud
+    start_at: end
+    storage: file_storage
+    operators:
+      # Connexions admin/SYSDBA, echecs d'auth, changements de droits → securite.
+      - type: add
+        field: resource["log.category"]
+        value: security
+      - type: add
+        field: attributes["db.system"]
+        value: oracle
+
+  # --- MYSQL : error.log (erreurs) + slow query log ---
+  filelog/db-mysql:
+    include:
+      - /var/log/mysql/error.log
+      - /var/log/mysql/*slow*.log
+      - /var/log/mysqld.log
+    start_at: end
+    storage: file_storage
+    operators:
+      # db.log.slow_query (Élevée) — requetes lentes.
+      - type: add
+        field: attributes["log.type"]
+        value: slow_query
+        if: 'body matches "Query_time:"'
+      # db.log.error (Critique) — lignes [ERROR].
+      - type: add
+        field: attributes["log.type"]
+        value: error
+        if: 'body matches "\\[ERROR\\]"'
+      # db.log.security — echecs de connexion (Access denied).
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "Access denied for user"'
+      - type: add
+        field: attributes["db.system"]
+        value: mysql
+
+  # --- MYSQL : audit log (plugin audit MariaDB/Percona) — db.log.security ---
+  filelog/db-mysql-audit:
+    include:
+      - /var/log/mysql/audit.log
+      - /var/log/mysql/server_audit.log
+    start_at: end
+    storage: file_storage
+    operators:
+      # Connexions, changements de privileges (GRANT/REVOKE), DROP → securite.
+      - type: add
+        field: resource["log.category"]
+        value: security
+      - type: add
+        field: attributes["db.system"]
+        value: mysql
+
+  # --- POSTGRESQL : log principal (erreurs + slow + auth) ---
+  # pgaudit et les echecs d'auth (FATAL) sont dans ce meme fichier → tag conditionnel.
+  filelog/db-postgresql:
+    include:
+      - /var/log/postgresql/*.log
+    start_at: end
+    storage: file_storage
+    operators:
+      # db.log.error (Critique)
+      - type: add
+        field: attributes["log.type"]
+        value: error
+        if: 'body matches "(ERROR|FATAL|PANIC):"'
+      # db.log.slow_query (Élevée) — log_min_duration_statement (duration: … ms).
+      - type: add
+        field: attributes["log.type"]
+        value: slow_query
+        if: 'body matches "duration: [0-9.]+ ms"'
+      # db.log.security — echecs d'auth, refus de droits, audit pgaudit.
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "(password authentication failed|authentication failed|permission denied|AUDIT:)"'
+      - type: add
+        field: attributes["db.system"]
+        value: postgresql
+
+  # --- MSSQL : errorlog (erreurs + echecs de login) ---
+  # NB : l'audit natif SQL Server Audit ecrit des fichiers .sqlaudit BINAIRES, non
+  # lisibles par filelog. Router SQL Server Audit vers l'Event Log Windows (capte
+  # alors par le socle windowseventlog/security) ou vers une table interrogeable.
+  filelog/db-mssql:
+    include:
+      - /var/opt/mssql/log/errorlog*
+    start_at: end
+    storage: file_storage
+    operators:
+      # db.log.error (Critique)
+      - type: add
+        field: attributes["log.type"]
+        value: error
+        if: 'body matches "Error:"'
+      # db.log.security — echecs de login (Login failed for user).
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "Login failed for user"'
+      - type: add
+        field: attributes["db.system"]
+        value: mssql

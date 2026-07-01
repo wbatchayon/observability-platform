@@ -1,0 +1,61 @@
+---
+# SECRETS — À CHIFFRER AVEC SOPS avant tout commit (cf. .sops.yaml : le motif
+# `inventories/.../vault*.yaml` est chiffré). Ne JAMAIS committer ce fichier en clair.
+# Toutes les valeurs ci-dessous sont des PLACEHDOLDERS à remplacer.
+#
+#   sops --encrypt --in-place ansible/inventories/<env>/group_vars/all/vault.yaml
+#
+# Ces variables sont référencées par group_vars/all/main.yaml et par les profils métier
+# (roles/otel-agent/profiles/*.yaml). Ne renseignez que les blocs des équipes présentes
+# dans votre environnement.
+
+# --- mTLS de l'agent (commun à tous les hôtes) ---
+vault_otel_tls_ca: "REMPLACER_PAR_CA_PEM"
+vault_otel_tls_cert: "REMPLACER_PAR_CERT_PEM"
+vault_otel_tls_key: "REMPLACER_PAR_KEY_PEM"
+
+# --- Database (profil database) : DSN par moteur ---
+vault_db_oracle_dsn: "oracle://user:pass@oracle-host:1521/service"
+vault_db_mysql_dsn: "user:pass@tcp(mysql-host:3306)/"
+vault_db_postgresql_dsn: "host=pg-host port=5432 user=otel password=pass sslmode=require"
+vault_db_mssql_dsn: "sqlserver://user:pass@mssql-host:1433"
+
+# --- Network (profil network) : SNMP + communities ---
+vault_snmp_fortigate_user: "REMPLACER"
+vault_snmp_fortigate_auth_password: "REMPLACER"
+vault_snmp_fortigate_priv_password: "REMPLACER"
+vault_snmp_fortiadc_user: "REMPLACER"
+vault_snmp_fortiadc_auth_password: "REMPLACER"
+vault_snmp_fortiadc_priv_password: "REMPLACER"
+vault_snmp_switches_community: "REMPLACER"
+vault_snmp_dns_dhcp_community: "REMPLACER"
+
+# --- Virtualisation (profil virtualisation) : SNMP v3 des BMC (iBMC/iDRAC/iLO) ---
+vault_virt_bmc_snmp_v3_user: "REMPLACER"
+vault_virt_bmc_snmp_v3_auth_password: "REMPLACER"
+vault_virt_bmc_snmp_v3_priv_password: "REMPLACER"
+# (TODO exporter API FusionCompute/eDME, si activé)
+# vault_virt_api_exporter_token: "REMPLACER"
+
+# --- Storage (profil storage) : SNMP v3 baie ---
+vault_snmp_storage_user: "REMPLACER"
+vault_snmp_storage_auth_password: "REMPLACER"
+vault_snmp_storage_priv_password: "REMPLACER"
+
+# --- Backup/Restore (profil backup-restore) : SNMP v3 baie backup ---
+vault_backup_snmp_user: "REMPLACER"
+vault_backup_snmp_auth_password: "REMPLACER"
+vault_backup_snmp_priv_password: "REMPLACER"
+
+# --- Orchestration (profil orchestration) : auth des endpoints Prometheus ---
+vault_orch_nexus_metrics_user: "REMPLACER"
+vault_orch_nexus_metrics_password: "REMPLACER"
+vault_orch_openbao_metrics_token: "REMPLACER"
+
+# --- Observabilité (profil observabilite) : auth des endpoints /metrics ---
+vault_observabilite_loki_user: "REMPLACER"
+vault_observabilite_loki_password: "REMPLACER"
+vault_observabilite_mimir_user: "REMPLACER"
+vault_observabilite_mimir_password: "REMPLACER"
+vault_observabilite_grafana_token: "REMPLACER"
+vault_observabilite_scrape_token: "REMPLACER"

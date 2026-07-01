@@ -1,0 +1,300 @@
+---
+# =============================================================================
+# Profil OpenTelemetry Collector — domaine "kubernetes" (Kube/Container Platform)
+# Technos client : RKE2, Kubernetes. Déployé par Ansible (rôle otel-agent).
+# Source des besoins : Besoins détaillé.xlsx (Socle Commun → Kubernetes Cluster)
+#                      et Besoin_securité.xlsx (Container Orchestration + Cluster
+#                      Management + Network Based Security).
+#
+# HYPOTHÈSE DE DÉPLOIEMENT (IMPORTANTE)
+# -----------------------------------------------------------------------------
+# Ce profil suppose que le collector otelcol-contrib s'exécute AVEC ACCÈS AU
+# CLUSTER, de l'une des deux manières suivantes :
+#   1. IN-CLUSTER : le collector tourne comme Pod/DaemonSet et utilise le
+#      ServiceAccount monté (auth_type: serviceAccount, token + CA sous
+#      /var/run/secrets/kubernetes.io/serviceaccount/). C'est le mode par défaut.
+#   2. HORS-CLUSTER : le collector tourne sur un hôte disposant d'un kubeconfig
+#      (auth_type: kubeConfig) — surcharger otel_k8s_auth_type: "kubeConfig".
+#
+# RBAC REQUIS (ServiceAccount lié via ClusterRole/ClusterRoleBinding) :
+#   - get/list/watch sur : nodes, nodes/stats, nodes/proxy, pods, namespaces,
+#     services, endpoints, events, replicationcontrollers, resourcequotas,
+#     persistentvolumes, persistentvolumeclaims
+#   - get/list/watch sur apps: deployments, replicasets, daemonsets, statefulsets
+#   - get/list/watch sur batch: jobs, cronjobs
+#   - nonResourceURLs ["/metrics"] verb ["get"] (scrape apiserver /metrics)
+#   - k8sobjects : watch/list sur "events" (et objets sécurité optionnels ci-dessous)
+#
+# CONTENU : on n'ajoute QUE les receivers métier Kubernetes. Le socle
+# (hostmetrics, filelog générique, journald, otlp mTLS, filelog/security,
+# attributs team/domain/criticality/retention_class) reste géré par le template.
+# =============================================================================
+
+otel_team: "Kube/Container Platform"
+otel_domain: "kubernetes"
+otel_criticality: "high"
+otel_retention_class: "short"    # feuille client : rétention 30 jours (télémétrie standard)
+
+# -----------------------------------------------------------------------------
+# Receivers métier Kubernetes (injectés tels quels sous `receivers:` du template).
+# Tous les receivers/operators ci-dessous existent UNIQUEMENT dans otelcol-contrib.
+#
+# MAPPING besoins → receiver :
+#   k8s.node.status (Ready/NotReady) ....... k8s_cluster (k8s.node.condition_ready)
+#   k8s.pod.count.running .................. k8s_cluster (k8s.pod.phase == Running)
+#   k8s.pod.count.pending_failed ........... k8s_cluster (k8s.pod.phase Pending/Failed
+#                                            + k8s.pod.status_reason)
+#   k8s.container.restarts ................. k8s_cluster (k8s.container.restarts)
+#   k8s.pv.usage .......................... k8s_cluster (capacité) + kubeletstats
+#                                            (k8s.volume.available/capacity par Pod)
+#   k8s.node.cpu.usage .................... kubeletstats (k8s.node.cpu.*)
+#   k8s.node.memory.usage ................. kubeletstats (k8s.node.memory.*)
+#   k8s.node.disk.space_utilization ....... kubeletstats (k8s.node.filesystem.*)
+#   k8s.kubelet.status .................... kubeletstats (succès du scrape kubelet
+#                                            = kubelet Ready ; sinon up==0)
+#   k8s.api_server.request_latency ........ prometheus/k8s-apiserver
+#                                            (apiserver_request_duration_seconds)
+# -----------------------------------------------------------------------------
+otel_profile_receivers:
+
+  # --- État du cluster (control plane view) : nodes / pods / workloads --------
+  # Besoins : k8s.node.status (Critique), k8s.pod.count.running,
+  # k8s.pod.count.pending_failed (Critique), k8s.container.restarts, k8s.pv.usage.
+  # Vue cluster-wide : un SEUL k8s_cluster par cluster suffit (à ne pas activer
+  # sur tous les nodes d'un DaemonSet — cf. déploiement Deployment 1 réplica, ou
+  # leader election). Sinon métriques dupliquées.
+  k8s_cluster:
+    auth_type: "{{ otel_k8s_auth_type | default('serviceAccount') }}"
+    collection_interval: "{{ otel_k8s_cluster_interval | default('30s') }}"
+    node_conditions_to_report:
+      - Ready              # k8s.node.status : Ready / NotReady (Critique)
+      - MemoryPressure
+      - DiskPressure
+      - PIDPressure
+      - NetworkUnavailable
+    allocatable_types_to_report:
+      - cpu
+      - memory
+      - storage
+    metrics:
+      # k8s.node.status (Ready=1 / NotReady=0) — Critique.
+      k8s.node.condition_ready:
+        enabled: true
+      # k8s.pod.count.running / pending_failed : phases des Pods (Critique).
+      k8s.pod.phase:
+        enabled: true
+      k8s.pod.status_reason:
+        enabled: true
+      # k8s.container.restarts : boucles de crash / OOMKilled.
+      k8s.container.restarts:
+        enabled: true
+      # k8s.pv.usage : capacité déclarée des PV/PVC (utilisation réelle = kubeletstats).
+      k8s.persistentvolumeclaim.capacity:
+        enabled: true
+
+  # --- Métriques ressources des nodes et pods via l'API kubelet ---------------
+  # Besoins : k8s.node.cpu.usage, k8s.node.memory.usage,
+  # k8s.node.disk.space_utilization (Critique), k8s.kubelet.status (Critique),
+  # k8s.pv.usage (utilisation réelle des volumes montés par Pod).
+  # Scrappe le kubelet LOCAL (mode DaemonSet : un collector par node).
+  # endpoint = kubelet du node courant (Downward API K8S_NODE_NAME) ; surcharge
+  # possible via otel_k8s_kubelet_endpoint (ex. hors-cluster / kubeconfig).
+  kubeletstats:
+    auth_type: "{{ otel_k8s_auth_type | default('serviceAccount') }}"
+    endpoint: "{{ otel_k8s_kubelet_endpoint | default('https://${env:K8S_NODE_NAME}:10250') }}"
+    collection_interval: "{{ otel_k8s_kubelet_interval | default('30s') }}"
+    insecure_skip_verify: "{{ otel_k8s_kubelet_insecure_skip_verify | default(true) }}"
+    metric_groups:
+      - node
+      - pod
+      - container
+      - volume        # k8s.volume.* : k8s.pv.usage (available/capacity par Pod)
+    metrics:
+      # k8s.node.cpu.usage.
+      k8s.node.cpu.usage:
+        enabled: true
+      k8s.node.cpu.utilization:
+        enabled: true
+      # k8s.node.memory.usage.
+      k8s.node.memory.usage:
+        enabled: true
+      # k8s.node.disk.space_utilization (Critique) : usage/available/capacity du
+      # filesystem du node (utilisation % calculée en aval usage/capacity).
+      k8s.node.filesystem.usage:
+        enabled: true
+      k8s.node.filesystem.available:
+        enabled: true
+      k8s.node.filesystem.capacity:
+        enabled: true
+    # NOTE k8s.kubelet.status (Critique) : le kubelet n'expose pas de métrique
+    # "status" dédiée. Deux signaux disponibles :
+    #   - succès/échec du scrape kubeletstats ci-dessus (échec => kubelet KO) ;
+    #   - up{job="k8s-kubelet"} si l'on scrappe /metrics via prometheus (option).
+    # L'alerte kubelet down se construit en aval sur l'absence de k8s.node.*.
+
+  # --- Latence des requêtes API server ----------------------------------------
+  # Besoin : k8s.api_server.request_latency (Critique) via le endpoint /metrics
+  # de l'apiserver (histogramme apiserver_request_duration_seconds).
+  # In-cluster : cible le Service kubernetes.default ; bearer token + CA du SA.
+  # RBAC : nonResourceURLs ["/metrics"] verb ["get"].
+  prometheus/k8s-apiserver:
+    config:
+      scrape_configs:
+        - job_name: k8s-apiserver
+          scheme: https
+          scrape_interval: "{{ otel_k8s_apiserver_interval | default('30s') }}"
+          metrics_path: /metrics
+          static_configs:
+            - targets:
+                - "{{ otel_k8s_apiserver_target | default('kubernetes.default.svc:443') }}"
+          tls_config:
+            ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            insecure_skip_verify: "{{ otel_k8s_apiserver_insecure_skip_verify | default(false) }}"
+          authorization:
+            type: Bearer
+            credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+          # On ne garde que la latence des requêtes (limite la cardinalité).
+          metric_relabel_configs:
+            - source_labels: [__name__]
+              regex: "apiserver_request_duration_seconds.*|apiserver_request_total"
+              action: keep
+
+  # --- Événements Kubernetes : cycle de vie des Pods --------------------------
+  # Besoin : k8s.event.pod_lifecycle (création / suppression / échec de démarrage).
+  # Receiver logs : watch sur les `events` du cluster (mode watch = flux temps réel).
+  # RBAC : watch/list "events". Couvre aussi (sécurité) le déploiement de pods
+  # inconnus (cryptomining) via les events de création.
+  k8sobjects:
+    auth_type: "{{ otel_k8s_auth_type | default('serviceAccount') }}"
+    objects:
+      - name: events
+        mode: watch
+        group: ""      # core/v1
+      # OPTION SÉCURITÉ (Cluster Management) — à activer selon la charge/RBAC :
+      # audit des mutations d'objets sensibles. L'API server audit log (ci-dessous)
+      # reste la source AUTORITAIRE (identité de l'appelant incluse) ; ces watch
+      # sont un complément temps réel.
+      # - name: clusterroles         # RBAC : création/élévation de ClusterRoles
+      #   mode: watch
+      #   group: rbac.authorization.k8s.io
+      # - name: clusterrolebindings
+      #   mode: watch
+      #   group: rbac.authorization.k8s.io
+      # - name: networkpolicies      # modif/suppression de NetworkPolicies
+      #   mode: watch
+      #   group: networking.k8s.io
+
+  # --- Audit logs de l'API server (SÉCURITÉ) ----------------------------------
+  # Besoin : k8s.api_server.audit — écrit sur les nodes CONTROL PLANE au chemin
+  # d'audit (RKE2 : audit-log-path configuré dans l'audit policy, souvent
+  # /var/lib/rancher/rke2/server/logs/audit.log).
+  # Couvre l'essentiel des besoins sécurité "Cluster Management" avec l'identité
+  # de l'appelant : échecs répétés d'auth API server, création/élévation de
+  # ClusterRoles (RBAC), pods privilégiés / hostPID / hostNetwork, `kubectl exec`
+  # (subresource exec) à horaires atypiques, modification/suppression de
+  # ConfigMaps/Secrets, modif/désactivation de NetworkPolicies.
+  # RÉTENTION : besoin = 1 an. Le processeur `resource` du socle force
+  # retention_class=short ; on tague donc log.category=security pour que la
+  # Gateway route ces logs vers la rétention sécurité dédiée (indépendante de
+  # retention_class), conformément au design du socle filelog/security.
+  filelog/k8s-audit:
+    include:
+      - "{{ otel_k8s_audit_log_path | default('/var/lib/rancher/rke2/server/logs/audit.log') }}"
+    start_at: end
+    storage: file_storage
+    operators:
+      # Parse JSON (audit policy en mode JSON lines) — best effort.
+      - type: json_parser
+        if: 'body matches "^\\s*\\{"'
+        parse_from: body
+        parse_to: attributes
+      - type: add
+        field: resource["log.category"]
+        value: security
+      - type: add
+        field: resource["k8s.log.type"]
+        value: apiserver-audit
+      # Marqueur pour le routage rétention 1 an côté Gateway (voir note ci-dessus).
+      - type: add
+        field: resource["security.retention"]
+        value: long
+
+  # --- Logs des composants control plane + kubelet (SÉCURITÉ) -----------------
+  # Besoins : k8s.control_plane.error (Controller Manager, Scheduler), k8s.kubelet.error.
+  # Sécurité : interruption des audit logs du control plane (arrêt apiserver/audit).
+  # RKE2 : les composants (kube-apiserver, kube-controller-manager, kube-scheduler,
+  # etcd) tournent en static pods → logs sous /var/log/pods/**. Le service
+  # rke2-server/rke2-agent (qui embarque le kubelet) écrit lui dans journald,
+  # DÉJÀ capté par le receiver journald du socle → k8s.kubelet.error y est présent.
+  # On tague ici SÉCURITÉ les logs des composants control plane (cf. directive).
+  filelog/k8s-controlplane:
+    include:
+      - "{{ otel_k8s_controlplane_log_glob | default('/var/log/pods/kube-system_kube-apiserver*/**/*.log') }}"
+      - "{{ otel_k8s_controller_log_glob | default('/var/log/pods/kube-system_kube-controller-manager*/**/*.log') }}"
+      - "{{ otel_k8s_scheduler_log_glob | default('/var/log/pods/kube-system_kube-scheduler*/**/*.log') }}"
+    exclude:
+      - /var/log/pods/**/*.gz
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
+      - type: add
+        field: resource["k8s.log.type"]
+        value: control-plane
+
+# -----------------------------------------------------------------------------
+# Branchement des receivers sur les pipelines du socle (le template les ajoute
+# aux receivers déjà présents : hostmetrics/otlp pour metrics, filelog/journald
+# pour logs).
+# -----------------------------------------------------------------------------
+otel_profile_metrics_receivers:
+  - k8s_cluster
+  - kubeletstats
+  - prometheus/k8s-apiserver
+
+otel_profile_logs_receivers:
+  - k8sobjects
+  - filelog/k8s-audit
+  - filelog/k8s-controlplane
+
+# Pas de source de traces spécifique au domaine kubernetes (les traces applicatives
+# arrivent via le receiver otlp du socle).
+otel_profile_traces_receivers: []
+
+# -----------------------------------------------------------------------------
+# Attributs de ressource additionnels (identité cluster pour le routage/corrélation).
+# -----------------------------------------------------------------------------
+otel_profile_resource_attributes:
+  - {key: "k8s.cluster.name", value: "{{ otel_k8s_cluster_name | default('rke2-cluster') }}", action: upsert}
+  - {key: "k8s.distribution", value: "rke2", action: upsert}
+  - {key: "orchestrator.type", value: "kubernetes", action: upsert}
+
+# =============================================================================
+# ÉLÉMENTS DÉPENDANTS DU CNI / TODO (Network Based Security)
+# -----------------------------------------------------------------------------
+# Les détections réseau suivantes DÉPENDENT du CNI déployé (RKE2 par défaut :
+# Canal = Flannel + Calico ; parfois Cilium) et n'ont PAS de source standard
+# Kubernetes → non incluses ici, à câbler selon le CNI :
+#
+#   - deny logs NetworkPolicy (blocages de flux entre pods critiques) :
+#       * Calico : activer felix LogDroppedPacketsPrefix / logs deny → syslog,
+#         puis filelog sur le chemin correspondant (ou métriques calico-felix
+#         via prometheus : job calico-felix, calico_denied_packets).
+#       * Cilium : Hubble (hubble_flows_processed_total, verdict=DROPPED) via
+#         prometheus scrape de hubble-metrics, ou export des flows Hubble.
+#   - tentatives de communication entre namespaces isolés : même source CNI
+#     (verdict DROP Hubble / deny Calico) — corrélation namespace source/dest.
+#   - scan interne de services : dérivable des flows CNI (Hubble) ou d'un IDS.
+#
+#   TODO(CNI) : ajouter, une fois le CNI figé, un receiver
+#     prometheus/cilium-hubble OU filelog/calico-deny + attribut
+#     log.category=security. Non standardisable tant que le CNI n'est pas arrêté.
+#
+#   - connexions échouées à Rancher depuis IP externes : source = logs du Pod
+#     rancher (cattle-system) et/ou de l'ingress. À capter là où tourne Rancher
+#     (filelog /var/log/pods/cattle-system_rancher*/**/*.log tagué security) —
+#     hors périmètre de ce collector node si Rancher est sur un cluster mgmt séparé.
+#     TODO(Rancher) : profil dédié ou include conditionnel sur les nodes mgmt.
+# =============================================================================

@@ -1,34 +1,145 @@
 # Configuration de l'agent OpenTelemetry Collector (générée par Ansible).
-# Exporte en OTLP/gRPC mTLS vers l'Edge Collector du DC.
+# Collecte métriques hôte + logs + traces/otlp des applis locales, et exporte
+# en OTLP/gRPC mTLS vers l'Edge Collector du DC.
+{% set tls_ca = (otel_tls_dir_linux ~ '/ca.crt') if ansible_facts['system'] == 'Linux' else (otel_tls_dir_windows ~ '\\ca.crt') %}
+{% set tls_cert = (otel_tls_dir_linux ~ '/tls.crt') if ansible_facts['system'] == 'Linux' else (otel_tls_dir_windows ~ '\\tls.crt') %}
+{% set tls_key = (otel_tls_dir_linux ~ '/tls.key') if ansible_facts['system'] == 'Linux' else (otel_tls_dir_windows ~ '\\tls.key') %}
 extensions:
   file_storage:
     directory: {{ '/var/lib/otelcol/queue' if ansible_facts['system'] == 'Linux' else 'C:\\ProgramData\\otelcol-contrib\\queue' }}
+  health_check:
+    endpoint: 127.0.0.1:13133
 
 receivers:
   hostmetrics:
     collection_interval: 30s
     scrapers:
-      cpu: {}
-      memory: {}
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
       disk: {}
-      filesystem: {}
+      filesystem:
+        metrics:
+          system.filesystem.utilization:
+            enabled: true
+          # vm.disk.space_utilization (Inode) — Socle Commun.
+          system.filesystem.inodes.usage:
+            enabled: true
       network: {}
       load: {}
+      paging:
+        metrics:
+          system.paging.utilization:
+            enabled: true
+      processes: {}
+      # vm.uptime (Socle Commun) : le scraper system expose system.uptime.
+      system: {}
+{% if otel_collect_process_metrics | default(false) %}
+      # Ressources par processus / Top process CPU-RAM (Orchestration, Socle Commun).
+      # Coûteux + privilèges requis : activé via otel_collect_process_metrics.
+      process:
+        metrics:
+          process.cpu.utilization:
+            enabled: true
+{% endif %}
+  # Point d'entrée OTLP pour les applications/conteneurs (traces/métriques/logs).
+  # Écoute sur toutes les interfaces, protégé par mTLS (mêmes certifs PKI que l'export) :
+  # tout client doit présenter un certificat signé par la CA interne (client_ca_file).
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        tls:
+          cert_file: {{ tls_cert }}
+          key_file: {{ tls_key }}
+          client_ca_file: {{ tls_ca }}
+      http:
+        endpoint: 0.0.0.0:4318
+        tls:
+          cert_file: {{ tls_cert }}
+          key_file: {{ tls_key }}
+          client_ca_file: {{ tls_ca }}
   filelog:
     include:
 {% if ansible_facts['system'] == 'Linux' %}
       - /var/log/*.log
+      - /var/log/**/*.log
       - /var/log/syslog
 {% else %}
       - 'C:\\inetpub\\logs\\**\\*.log'
 {% endif %}
-    start_at: end
+    exclude:
 {% if ansible_facts['system'] == 'Linux' %}
+      - /var/log/**/*.gz
+      - /var/log/**/*.[0-9]
+      # Sources sécurité captées par filelog/security (évite le double comptage).
+{% for p in otel_security_log_paths_linux %}
+      - {{ p }}
+{% endfor %}
+{% else %}
+      - 'C:\\inetpub\\logs\\**\\*.gz'
+{% endif %}
+    start_at: end
+    # Persistance des offsets de lecture : au redémarrage, on reprend là où on s'était
+    # arrêté au lieu de repartir de la fin (sinon les logs écrits pendant l'arrêt sont perdus).
+    storage: file_storage
+{% if ansible_facts['system'] == 'Linux' %}
+  # Sources de logs à vocation sécurité (auth/brute-force, kernel, audit, changements de
+  # conf) — taguées log.category=security pour la détection en aval (catalogue MITRE
+  # ATT&CK, cf. Besoin_securité.xlsx). Séparées du filelog générique pour un routage et
+  # une rétention dédiés côté Gateway.
+  filelog/security:
+    include:
+{% for p in otel_security_log_paths_linux %}
+      - {{ p }}
+{% endfor %}
+    exclude:
+      - /var/log/**/*.gz
+      - /var/log/**/*.[0-9]
+    start_at: end
+    storage: file_storage
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
   journald:
     directory: /var/log/journal
+    all: true
 {% else %}
-  windowseventlog:
+  windowseventlog/application:
     channel: application
+  windowseventlog/system:
+    channel: system
+  # Journal de sécurité Windows (échecs d'authentification, gestion des comptes, montée
+  # de privilèges…) — tagué log.category=security pour la détection en aval (Besoin_securité.xlsx).
+  windowseventlog/security:
+    channel: security
+    operators:
+      - type: add
+        field: resource["log.category"]
+        value: security
+{% endif %}
+  # Auto-télémétrie du collector (santé/débit/files) exposée en interne, ré-injectée
+  # dans le pipeline métriques pour être remontée au backend.
+  prometheus/internal:
+    config:
+      scrape_configs:
+        - job_name: otelcol-agent
+          scrape_interval: 30s
+          static_configs:
+            - targets: [127.0.0.1:8888]
+{% if otel_profile_receivers | default({}) %}
+  # --- Receivers spécifiques au profil d'équipe (Besoins détaillé.xlsx) ---
+  # Injectés depuis roles/otel-agent/profiles/{{ otel_profile }}.yaml, sans toucher au socle.
+{% for _name, _cfg in otel_profile_receivers.items() %}
+  {{ _name }}:
+{{ _cfg | to_nice_yaml(indent=2, width=1000) | indent(4, True) }}
+{% endfor %}
 {% endif %}
 
 processors:
@@ -38,6 +149,9 @@ processors:
     spike_limit_percentage: 20
   resourcedetection:
     detectors: [env, system]
+  # Enrichissement « profil piloté par donnée » : équipe/domaine/criticité/classe de
+  # rétention (colonnes des besoins) attachés à toute la télémétrie pour le routage et la
+  # rétention par classe côté Gateway/backends.
   resource:
     attributes:
       - key: host.name
@@ -46,6 +160,39 @@ processors:
       - key: environment
         value: "{{ environment_name }}"
         action: upsert
+      - key: team
+        value: "{{ otel_team }}"
+        action: upsert
+      - key: domain
+        value: "{{ otel_domain }}"
+        action: upsert
+      - key: criticality
+        value: "{{ otel_criticality }}"
+        action: upsert
+      - key: retention_class
+        value: "{{ otel_retention_class }}"
+        action: upsert
+{% for _a in otel_profile_resource_attributes | default([]) %}
+      - key: {{ _a.key }}
+        value: "{{ _a.value }}"
+        action: {{ _a.action | default('upsert') }}
+{% endfor %}
+      # --- Enrichissement CMDB : propriétaire, code appli, astreinte, localisation…
+      # Attaché à toute la télémétrie de l'hôte pour la recherche/corrélation dans Grafana.
+      # Alimenté par host_vars (otel_cmdb_attributes), synchronisé depuis la CMDB.
+{% for _k, _v in (otel_cmdb_attributes | default({})).items() %}
+      - key: {{ _k }}
+        value: "{{ _v }}"
+        action: upsert
+{% endfor %}
+  # Anti-boucle : on ne réingère pas les logs du collector lui-même
+  # (sinon feedback/amplification agent → backend → agent).
+  filter/self:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'body["_SYSTEMD_UNIT"] == "otelcol-contrib.service"'
+        - 'IsString(body) and IsMatch(body, ".*otelcol-contrib.*")'
   batch:
     send_batch_size: 8192
     timeout: 5s
@@ -56,9 +203,9 @@ exporters:
     compression: gzip
     tls:
       insecure: false
-      ca_file: {{ otel_tls_dir_linux ~ '/ca.crt' if ansible_facts['system'] == 'Linux' else otel_tls_dir_windows ~ '\\ca.crt' }}
-      cert_file: {{ otel_tls_dir_linux ~ '/tls.crt' if ansible_facts['system'] == 'Linux' else otel_tls_dir_windows ~ '\\tls.crt' }}
-      key_file: {{ otel_tls_dir_linux ~ '/tls.key' if ansible_facts['system'] == 'Linux' else otel_tls_dir_windows ~ '\\tls.key' }}
+      ca_file: {{ tls_ca }}
+      cert_file: {{ tls_cert }}
+      key_file: {{ tls_key }}
     sending_queue:
       enabled: true
       storage: file_storage
@@ -66,17 +213,30 @@ exporters:
       enabled: true
 
 service:
-  extensions: [file_storage]
+  extensions: [file_storage, health_check]
+  telemetry:
+    metrics:
+      level: detailed
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 127.0.0.1
+                port: 8888
   pipelines:
     metrics:
-      receivers: [hostmetrics]
+      receivers: [hostmetrics, otlp, prometheus/internal{% for r in otel_profile_metrics_receivers | default([]) %}, {{ r }}{% endfor %}]
       processors: [memory_limiter, resourcedetection, resource, batch]
       exporters: [otlp]
     logs:
 {% if ansible_facts['system'] == 'Linux' %}
-      receivers: [filelog, journald]
+      receivers: [filelog, filelog/security, journald, otlp{% for r in otel_profile_logs_receivers | default([]) %}, {{ r }}{% endfor %}]
 {% else %}
-      receivers: [filelog, windowseventlog]
+      receivers: [filelog, windowseventlog/application, windowseventlog/system, windowseventlog/security, otlp{% for r in otel_profile_logs_receivers | default([]) %}, {{ r }}{% endfor %}]
 {% endif %}
+      processors: [memory_limiter, filter/self, resourcedetection, resource, batch]
+      exporters: [otlp]
+    traces:
+      receivers: [otlp{% for r in otel_profile_traces_receivers | default([]) %}, {{ r }}{% endfor %}]
       processors: [memory_limiter, resourcedetection, resource, batch]
       exporters: [otlp]

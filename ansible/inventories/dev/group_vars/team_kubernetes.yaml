@@ -1,0 +1,28 @@
+---
+# Équipe Kube/Container Platform → profil "kubernetes".
+# HYPOTHÈSE : collector avec accès cluster (in-cluster ServiceAccount, ou kubeconfig).
+otel_profile: kubernetes
+
+# Authentification à l'API Kubernetes :
+otel_k8s_auth_type: "serviceAccount"   # ou "kubeConfig" (hors cluster)
+otel_k8s_cluster_name: "rke2-prod"     # étiquette le cluster dans la télémétrie
+
+# Intervalles de collecte :
+otel_k8s_cluster_interval: "30s"
+otel_k8s_kubelet_interval: "30s"
+otel_k8s_apiserver_interval: "30s"
+
+# API server (latence des requêtes) :
+otel_k8s_apiserver_target: "kubernetes.default.svc:443"
+otel_k8s_apiserver_insecure_skip_verify: false
+otel_k8s_kubelet_insecure_skip_verify: true   # kubelet en TLS auto-signé fréquent
+
+# Chemins des logs control-plane (static pods RKE2 par défaut ; adapter à la distro) :
+otel_k8s_audit_log_path: "/var/lib/rancher/rke2/server/logs/audit.log"
+otel_k8s_controlplane_log_glob: "/var/log/pods/kube-system_kube-apiserver*/*/*.log"
+otel_k8s_controller_log_glob: "/var/log/pods/kube-system_kube-controller-manager*/*/*.log"
+otel_k8s_scheduler_log_glob: "/var/log/pods/kube-system_kube-scheduler*/*/*.log"
+
+# NB : k8s_cluster ne doit tourner qu'en UN exemplaire par cluster (pas par node).
+# K8S_NODE_NAME doit être injecté (Downward API) pour kubeletstats en déploiement in-cluster.
+# RBAC ClusterRole requis : détaillé en tête de roles/otel-agent/profiles/kubernetes.yaml.

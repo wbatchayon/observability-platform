@@ -1,0 +1,491 @@
+---
+# =============================================================================
+# Profil OpenTelemetry — Domaine RÉSEAU (Core Network)
+# Source besoins : Besoins détaillé.xlsx (feuille Network) + Besoin_securité.xlsx
+# (catégories Network / Network Services WAF-LB-DNS / Network Based Security).
+#
+# Rôle réel de l'agent sur ce profil : POLLER SNMP (interrogation des équipements
+# distants NCE / FortiGate / FortiADC / switches / EfficientIP) et COLLECTEUR
+# SYSLOG (les équipements poussent leurs journaux vers l'agent).
+#
+# IMPORTANT : ce fichier n'ajoute QUE les receivers métier. Le socle (hostmetrics,
+# filelog générique + sécurité OS, journald, otlp mTLS, attributs
+# team/domain/criticality/retention_class, pipelines, exporter) est géré par le
+# template config.yaml.j2. On ne redéfinit rien du socle ici.
+#
+# Endpoints équipements + secrets SNMP v3/v2c = variables vault/inventaire
+# (vault_snmp_*, *_snmp_host). Un receiver SNMP = un endpoint : pour parc multiple
+# il faut dupliquer l'instance (ou boucler en group_vars/inventaire par site).
+# =============================================================================
+
+otel_team: "Core Network"
+otel_domain: "network"
+otel_criticality: "critique"
+otel_retention_class: "long"          # >1 To/mois, criticité Critique
+
+# --- Attributs de ressource additionnels propres au profil réseau ---------------
+otel_profile_resource_attributes:
+  - key: net.observability.role
+    value: "snmp-poller+syslog-collector"
+    action: upsert
+  # Technos ciblées (traçabilité besoin ↔ collecte).
+  - key: net.technologies
+    value: "NCE,EfficientIP,FortiGate,FortiADC,Postfix"
+    action: upsert
+
+# --- Receivers à brancher automatiquement aux pipelines -------------------------
+otel_profile_metrics_receivers:
+  - snmp/fortigate
+  - snmp/switches
+  - snmp/loadbalancer
+  - snmp/dns_dhcp
+  - prometheus/network_blackbox     # latences / statut liens (ping/probe)
+otel_profile_logs_receivers:
+  - syslog/network                  # config change / deny / WAF / brute force / DNS
+  - syslog/dns_query                # dns.query.requests (gros volume, rétention courte)
+otel_profile_traces_receivers: []    # pas de tracing applicatif sur ce profil
+
+# Ports d'écoute syslog à ouvrir sur le pare-feu de la VM agent.
+otel_profile_firewall_ports:
+  - {port: 5514, proto: tcp}   # syslog/network (config change, deny, WAF, brute force…)
+  - {port: 5515, proto: udp}   # syslog/dns_query (gros volume, rétention 7j)
+
+# =============================================================================
+# RECEIVERS MÉTIER (injectés tels quels sous receivers: par le template)
+# =============================================================================
+otel_profile_receivers:
+
+  # ---------------------------------------------------------------------------
+  # 1) FIREWALL — FortiGate (FORTINET-FORTIGATE-MIB, entreprise .12356.101)
+  #    Besoins : fw.cpu.usage, fw.status, fw.interface.up, fw.throughput.wan_in,
+  #              fw.packet.errors, fw.sessions.count, fw.bgp.status
+  #    Non-SNMP : fw.rules.deny.hits (deny logs → syslog), fw.latency.arc_netcenter
+  #              (pas d'OID → prometheus/network_blackbox), fw.config.change (syslog)
+  # ---------------------------------------------------------------------------
+  snmp/fortigate:
+    collection_interval: 30s
+    endpoint: "udp://{{ fortigate_snmp_host }}:161"
+    version: v3
+    security_level: auth_priv
+    user: "{{ vault_snmp_fortigate_user }}"
+    auth_type: "SHA"
+    auth_password: "{{ vault_snmp_fortigate_auth_password }}"
+    privacy_type: "AES"
+    privacy_password: "{{ vault_snmp_fortigate_priv_password }}"
+    timeout: 10s
+    # Attribut d'index d'interface (ifIndex) pour les métriques par port.
+    resource_attributes:
+      interface.name:
+        # ifDescr — identité lisible de l'interface (WAN, LAN, ...).
+        column_oid: "1.3.6.1.2.1.2.2.1.2"
+      bgp.peer:
+        # bgpPeerRemoteAddr — identité du voisin BGP.
+        column_oid: "1.3.6.1.2.1.15.3.1.7"
+    metrics:
+      # fw.status : sysUpTime comme preuve de joignabilité/uptime de l'équipement.
+      fw.status:
+        unit: "s"
+        description: "Uptime FortiGate (sysUpTime) — joignabilité de l'équipement"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.2.1.1.3.0"   # sysUpTime
+      # fw.cpu.usage : fgSysCpuUsage (%).
+      fw.cpu.usage:
+        unit: "%"
+        description: "Charge CPU FortiGate (fgSysCpuUsage)"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.12356.101.4.1.3.0"   # fgSysCpuUsage
+      # fw.sessions.count : fgSysSesCount (nombre de sessions actives).
+      fw.sessions.count:
+        unit: "{sessions}"
+        description: "Sessions actives FortiGate (fgSysSesCount)"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.12356.101.4.1.8.0"   # fgSysSesCount
+      # fw.interface.up : ifOperStatus par interface (1=up, 2=down).
+      fw.interface.up:
+        unit: "1"
+        description: "Etat opérationnel des interfaces (ifOperStatus)"
+        gauge:
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.2.2.1.8"   # ifOperStatus
+            resource_attributes:
+              - interface.name
+      # fw.throughput.wan_in : ifHCInOctets (octets entrants 64-bit).
+      #   Sélection de l'interface WAN par interface.name côté requêtes/Gateway.
+      fw.throughput.wan_in:
+        unit: "By"
+        description: "Octets entrants par interface (ifHCInOctets) — filtrer WAN"
+        sum:
+          monotonic: true
+          aggregation: cumulative
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.31.1.1.1.6"   # ifHCInOctets
+            resource_attributes:
+              - interface.name
+      # fw.packet.errors : ifInErrors par interface.
+      fw.packet.errors:
+        unit: "{errors}"
+        description: "Erreurs de paquets entrants par interface (ifInErrors)"
+        sum:
+          monotonic: true
+          aggregation: cumulative
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.2.2.1.14"   # ifInErrors
+            resource_attributes:
+              - interface.name
+      # fw.bgp.status : bgpPeerState (BGP4-MIB, 6=established) par voisin.
+      fw.bgp.status:
+        unit: "1"
+        description: "Etat des sessions BGP (bgpPeerState, 6=established)"
+        gauge:
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.15.3.1.2"   # bgpPeerState
+            resource_attributes:
+              - bgp.peer
+    # NOTE fw.rules.deny.hits : pas de compteur SNMP standard exploitable côté
+    # FortiGate → dérivé des deny logs (syslog/network, voir plus bas).
+    # NOTE fw.latency.arc_netcenter : mesure de latence → prometheus/network_blackbox.
+
+  # ---------------------------------------------------------------------------
+  # 2) SWITCHING — Switches (MIB-II / HOST-RESOURCES-MIB, OID standards)
+  #    Besoins : switch.cpu.usage, switch.status, switch.interface.up,
+  #              switch.throughput.port, switch.interface.errors
+  #    Non-SNMP : switch.config.change (syslog/network)
+  #    Porte aussi les liens intersites (link.region.throughput) car ce sont les
+  #    interfaces WAN/uplink des switches/routeurs d'edge.
+  # ---------------------------------------------------------------------------
+  snmp/switches:
+    collection_interval: 30s
+    endpoint: "udp://{{ switches_snmp_host }}:161"
+    version: v2c
+    community: "{{ vault_snmp_switches_community }}"
+    timeout: 10s
+    resource_attributes:
+      interface.name:
+        column_oid: "1.3.6.1.2.1.2.2.1.2"   # ifDescr
+    metrics:
+      # switch.status : sysUpTime (joignabilité/uptime).
+      switch.status:
+        unit: "s"
+        description: "Uptime switch (sysUpTime)"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.2.1.1.3.0"   # sysUpTime
+      # switch.cpu.usage : hrProcessorLoad (charge CPU %, indexé par cœur).
+      switch.cpu.usage:
+        unit: "%"
+        description: "Charge processeur (hrProcessorLoad)"
+        gauge:
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.25.3.3.1.2"   # hrProcessorLoad
+      # switch.interface.up : ifOperStatus par port.
+      switch.interface.up:
+        unit: "1"
+        description: "Etat opérationnel des ports (ifOperStatus)"
+        gauge:
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.2.2.1.8"   # ifOperStatus
+            resource_attributes:
+              - interface.name
+      # switch.throughput.port : ifHCInOctets + ifHCOutOctets par port.
+      switch.throughput.port:
+        unit: "By"
+        description: "Trafic par port (ifHCInOctets, ifHCOutOctets)"
+        sum:
+          monotonic: true
+          aggregation: cumulative
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.31.1.1.1.6"    # ifHCInOctets
+            resource_attributes:
+              - interface.name
+          - oid: "1.3.6.1.2.1.31.1.1.1.10"   # ifHCOutOctets
+            resource_attributes:
+              - interface.name
+      # switch.interface.errors : ifInErrors + ifOutErrors par port.
+      switch.interface.errors:
+        unit: "{errors}"
+        description: "Erreurs par port (ifInErrors, ifOutErrors)"
+        sum:
+          monotonic: true
+          aggregation: cumulative
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.2.2.1.14"   # ifInErrors
+            resource_attributes:
+              - interface.name
+          - oid: "1.3.6.1.2.1.2.2.1.20"   # ifOutErrors
+            resource_attributes:
+              - interface.name
+      # link.region.throughput : LIENS INTERSITES — mêmes compteurs 64-bit sur les
+      # interfaces d'uplink WAN des routeurs/switches d'edge. Sélection des
+      # interfaces intersites par interface.name côté requêtes.
+      link.region.throughput:
+        unit: "By"
+        description: "Débit des liens intersites (ifHCInOctets uplink WAN)"
+        sum:
+          monotonic: true
+          aggregation: cumulative
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.31.1.1.1.6"   # ifHCInOctets
+            resource_attributes:
+              - interface.name
+    # NOTE link.iz.latency / link.region latence : pas d'OID → prometheus/network_blackbox.
+
+  # ---------------------------------------------------------------------------
+  # 3) LOAD BALANCER — FortiADC (MIB Fortinet, entreprise .12356.112)
+  #    Besoins : lb.status, lb.cpu.usage, lb.throughput.vip_in, lb.sessions.count,
+  #              lb.backend.errors, lb.healthcheck.status
+  #    Non-SNMP : lb.latency.vip_backend (→ blackbox), lb.config.change (syslog)
+  #    Les OID .12356.112.* sont PLAUSIBLES/À CONFIRMER contre la MIB FortiADC
+  #    exacte de la version déployée.
+  # ---------------------------------------------------------------------------
+  snmp/loadbalancer:
+    collection_interval: 30s
+    endpoint: "udp://{{ fortiadc_snmp_host }}:161"
+    version: v3
+    security_level: auth_priv
+    user: "{{ vault_snmp_fortiadc_user }}"
+    auth_type: "SHA"
+    auth_password: "{{ vault_snmp_fortiadc_auth_password }}"
+    privacy_type: "AES"
+    privacy_password: "{{ vault_snmp_fortiadc_priv_password }}"
+    timeout: 10s
+    resource_attributes:
+      interface.name:
+        column_oid: "1.3.6.1.2.1.2.2.1.2"   # ifDescr (interfaces / VIP)
+    metrics:
+      # lb.status : sysUpTime (joignabilité/uptime de l'ADC).
+      lb.status:
+        unit: "s"
+        description: "Uptime FortiADC (sysUpTime)"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.2.1.1.3.0"   # sysUpTime
+      # lb.cpu.usage : charge CPU (OID FortiADC — À CONFIRMER contre la MIB).
+      lb.cpu.usage:
+        unit: "%"
+        description: "Charge CPU FortiADC (fadcSysCpuUsage — à confirmer)"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.12356.112.4.1.3.0"   # fadcSysCpuUsage (plausible)
+      # lb.sessions.count : sessions actives (OID FortiADC — À CONFIRMER).
+      lb.sessions.count:
+        unit: "{sessions}"
+        description: "Sessions actives FortiADC (fadcSysSesCount — à confirmer)"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.12356.112.4.1.8.0"   # fadcSysSesCount (plausible)
+      # lb.throughput.vip_in : octets entrants par interface/VIP (ifHCInOctets).
+      lb.throughput.vip_in:
+        unit: "By"
+        description: "Octets entrants par VIP/interface (ifHCInOctets) — filtrer VIP"
+        sum:
+          monotonic: true
+          aggregation: cumulative
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.31.1.1.1.6"   # ifHCInOctets
+            resource_attributes:
+              - interface.name
+      # lb.backend.errors : erreurs d'interface côté backend (ifInErrors) — proxy.
+      #   Le détail par serveur réel (healthcheck ko) est mieux couvert par les logs.
+      lb.backend.errors:
+        unit: "{errors}"
+        description: "Erreurs d'interface (ifInErrors) — proxy erreurs backend"
+        sum:
+          monotonic: true
+          aggregation: cumulative
+          value_type: int
+        column_oids:
+          - oid: "1.3.6.1.2.1.2.2.1.14"   # ifInErrors
+            resource_attributes:
+              - interface.name
+    # NOTE lb.healthcheck.status : état des real servers / pools → table SNMP
+    # propriétaire FortiADC (OID à confirmer) OU API FortiADC. Non mappé ici tant
+    # que l'OID exact n'est pas validé → À CONFIRMER / collecte custom possible.
+    # NOTE lb.latency.vip_backend : latence VIP→backend → prometheus/network_blackbox.
+
+  # ---------------------------------------------------------------------------
+  # 4) DNS / DHCP / NTP — EfficientIP SOLIDserver (entreprise .2440)
+  #    Via SNMP standard on ne récupère de façon fiable que la joignabilité/uptime.
+  #    Les compteurs métier (dns.query.count, dns.failed.requests,
+  #    dhcp.scope.utilization, dhcp.offers.failed, ntp.offset) relèvent de l'API
+  #    propriétaire EfficientIP (RPC/REST) → PAS de receiver contrib dédié
+  #    (voir bloc TODO en fin de fichier). dns.query.requests = volumétrie → syslog.
+  # ---------------------------------------------------------------------------
+  snmp/dns_dhcp:
+    collection_interval: 60s
+    endpoint: "udp://{{ efficientip_snmp_host }}:161"
+    version: v2c
+    community: "{{ vault_snmp_dns_dhcp_community }}"
+    timeout: 10s
+    metrics:
+      # dns.status : sysUpTime de l'appliance DNS (joignabilité).
+      dns.status:
+        unit: "s"
+        description: "Uptime appliance DNS EfficientIP (sysUpTime)"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.2.1.1.3.0"   # sysUpTime
+      # dhcp.status : sysUpTime de l'appliance DHCP (joignabilité).
+      dhcp.status:
+        unit: "s"
+        description: "Uptime appliance DHCP EfficientIP (sysUpTime)"
+        gauge:
+          value_type: int
+        scalar_oids:
+          - oid: "1.3.6.1.2.1.1.3.0"   # sysUpTime
+    # NOTE dns.query.count / dns.failed.requests / dhcp.scope.utilization /
+    # dhcp.offers.failed / ntp.offset : API propriétaire EfficientIP requise
+    # (pas d'OID standard ni de receiver contrib) → voir TODO en fin de fichier.
+    # NOTE ntp.status : peut se vérifier via prometheus/network_blackbox (module
+    # NTP du blackbox_exporter) si sonde disponible → à confirmer.
+
+  # ---------------------------------------------------------------------------
+  # 5) LATENCES & STATUT DE LIENS — via blackbox_exporter scrappé en Prometheus
+  #    Aucune de ces mesures n'a d'OID direct : elles reposent sur des sondes
+  #    ICMP/HTTP/DNS d'un blackbox_exporter externe, exposées en /probe et
+  #    récupérées par le receiver prometheus (présent dans contrib).
+  #    Couvre : fw.latency.arc_netcenter, internet.link.status,
+  #             internet.latency.arc_internet, link.iz.latency,
+  #             (option) lb.latency.vip_backend, ntp.status.
+  #    Métriques produites par blackbox : probe_success (0/1) = *.status,
+  #    probe_duration_seconds / probe_icmp_duration_seconds = latence.
+  # ---------------------------------------------------------------------------
+  prometheus/network_blackbox:
+    config:
+      scrape_configs:
+        # Sondes ICMP : latences firewall<->ARC/NetCenter, liens internet, intersites.
+        - job_name: "blackbox-icmp-network"
+          scrape_interval: 30s
+          metrics_path: /probe
+          params:
+            module: [icmp]
+          static_configs:
+            - targets:
+                - "{{ probe_target_arc_netcenter }}"   # fw.latency.arc_netcenter
+                - "{{ probe_target_arc_internet }}"    # internet.latency.arc_internet + internet.link.status
+                - "{{ probe_target_link_iz }}"         # link.iz.latency
+          relabel_configs:
+            # Passe la cible réelle en paramètre ?target= puis pointe le scrape
+            # vers le blackbox_exporter (patron standard blackbox).
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: "{{ blackbox_exporter_endpoint }}"
+        # Sonde HTTP : statut du lien internet vu depuis un service de référence.
+        - job_name: "blackbox-http-internet"
+          scrape_interval: 30s
+          metrics_path: /probe
+          params:
+            module: [http_2xx]
+          static_configs:
+            - targets:
+                - "{{ probe_target_internet_http }}"   # internet.link.status
+          relabel_configs:
+            - source_labels: [__address__]
+              target_label: __param_target
+            - source_labels: [__param_target]
+              target_label: instance
+            - target_label: __address__
+              replacement: "{{ blackbox_exporter_endpoint }}"
+
+  # ---------------------------------------------------------------------------
+  # 6) SYSLOG ÉQUIPEMENTS — collecteur des journaux poussés par les équipements
+  #    (FortiGate, switches, FortiADC, EfficientIP). Port NON privilégié 5514.
+  #    Couvre les besoins log ET la détection sécurité (Besoin_securité.xlsx) :
+  #      - fw.config.change / switch.config.change / dns.config.change /
+  #        lb.config.change  (modifications non planifiées de règles/records)
+  #      - deny logs (blocages répétés entre pods, DoS applicatif)
+  #      - brute force sur l'admin, contournement WAF/LB, manipulation DNS,
+  #        scan réseau interne, flux sortant vers IP mauvaise réputation.
+  #    Un operator tague resource["log.category"]=security sur les événements
+  #    sensibles (config change / deny / DNS manip / auth), pour le routage et la
+  #    détection en aval (comme le socle filelog/security).
+  # ---------------------------------------------------------------------------
+  syslog/network:
+    protocol: rfc5424
+    tcp:
+      listen_address: "0.0.0.0:5514"
+    operators:
+      # Tag sécurité conditionnel : changements de conf, deny/blocages, DNS,
+      # échecs d'authentification / brute force admin, WAF/LB.
+      - type: add
+        field: resource["log.category"]
+        value: security
+        if: 'body matches "(?i)(config|policy|rule|record).*(change|update|add|delete|modif)|denied|deny|blocked|drop|auth.*fail|login.*fail|failed.*password|brute|waf|dns.*(update|transfer|spoof)"'
+      # Source explicite pour le routage Gateway.
+      - type: add
+        field: resource["net.log.source"]
+        value: "network-equipment-syslog"
+
+  # ---------------------------------------------------------------------------
+  # 7) SYSLOG DNS QUERIES — flux à très gros volume (dns.query.requests)
+  #    Séparé sur un port dédié (5515) pour un routage et une rétention COURTE (7j)
+  #    côté Gateway : on ne peut pas surcharger otel_retention_class ici (le
+  #    processor resource du socle le réimpose en aval), donc on pose un attribut
+  #    dédié log.retention_class=7d que la Gateway utilise pour router la rétention.
+  # ---------------------------------------------------------------------------
+  syslog/dns_query:
+    protocol: rfc3164
+    udp:
+      listen_address: "0.0.0.0:5515"
+    operators:
+      - type: add
+        field: resource["net.log.source"]
+        value: "dns-query-log"
+      # Rétention 7 jours demandée pour ce flux volumineux (routage Gateway).
+      - type: add
+        field: resource["log.retention_class"]
+        value: "7d"
+
+# =============================================================================
+# TODO / COLLECTE CUSTOM — sans receiver otelcol-contrib disponible
+# =============================================================================
+# Les champs ci-dessous n'ont ni OID SNMP standard fiable ni receiver contrib :
+# ils exigent une intégration via API propriétaire (à réaliser hors agent, p.ex.
+# un exporter Prometheus maison scrappé ensuite par prometheus/network_blackbox,
+# ou une ingestion OTLP depuis un connecteur dédié) :
+#
+#   - EfficientIP (SOLIDserver) API RPC/REST :
+#       dns.query.count, dns.failed.requests,
+#       dhcp.scope.utilization, dhcp.offers.failed,
+#       ntp.offset (et ntp.status si pas de sonde blackbox NTP)
+#   - Huawei NCE (API propriétaire) : télémétrie/inventaire des équipements gérés
+#       et détails non exposés en SNMP (à cadrer — pas de receiver contrib NCE).
+#   - FortiADC lb.healthcheck.status : état des real servers/pools → table SNMP
+#       propriétaire (OID à confirmer contre la MIB) OU API FortiADC.
+#   - FortiGate fw.rules.deny.hits : compteurs de hits par règle → dérivés des
+#       deny logs (syslog/network) faute de compteur SNMP par policy exploitable.
+#
+# Exemple (désactivé) de receiver à ajouter si un exporter EfficientIP est mis en
+# place (à décommenter et adapter, endpoint = exporter maison) :
+#
+#   prometheus/efficientip_api:
+#     config:
+#       scrape_configs:
+#         - job_name: "efficientip-api-exporter"
+#           scrape_interval: 60s
+#           static_configs:
+#             - targets: ["{{ efficientip_exporter_endpoint }}"]
+# =============================================================================

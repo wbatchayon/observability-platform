@@ -1,0 +1,187 @@
+---
+# =====================================================================================
+# Profil OpenTelemetry — domaine "backup-restore"
+# Technos : Huawei OceanProtect (baies de sauvegarde) + eDME (collecte API / SNMP).
+# Chargé par le rôle otel-agent (roles/otel-agent/templates/config.yaml.j2) via
+# otel_profile: "backup-restore". N'ajoute QUE des receivers métier ; le socle
+# (hostmetrics, filelog générique, journald/eventlog, otlp mTLS, logs sécurité OS,
+# attributs team/domain/criticality/retention_class) est fourni par le template.
+#
+# Couverture des besoins (Besoins détaillé.xlsx / feuille BackupRestore +
+# Besoin_securité.xlsx / catégories Backup + Disaster Recovery) :
+#   - Métriques baies & réseau (débit inter-zone/région, disque, IOPS, BP)  -> SNMP
+#   - Métriques métier backup (success_rate, missing_job, volumes, drifts)   -> API OceanProtect (TODO Prometheus)
+#   - Logs solution backup / DR (détection MITRE) + audit unprotected_clients -> SYSLOG
+# =====================================================================================
+
+otel_team: "Backup/Restore"
+otel_domain: "backup-restore"
+otel_criticality: "high"
+otel_retention_class: "standard"
+
+# Attributs de ressource additionnels (en plus du socle team/domain/criticality/...).
+otel_profile_resource_attributes:
+  - {key: "backup.solution", value: "OceanProtect", action: upsert}
+  - {key: "backup.management", value: "eDME", action: upsert}
+
+# -------------------------------------------------------------------------------------
+# Receivers métier injectés tels quels dans la section receivers du collector.
+# -------------------------------------------------------------------------------------
+otel_profile_receivers:
+
+  # ===================================================================================
+  # 1) SNMP — Baies OceanProtect / passerelle eDME (métriques stockage + débit réseau)
+  # ===================================================================================
+  # Besoins couverts (BackupRestore) :
+  #   Réseau  : network.inter_zone.bandwidth_utilization / network.inter_region.bandwidth_utilization
+  #   Stockage: disk.space.utilization, storage.array.iops,
+  #             storage.array.bandwidth.read, storage.array.bandwidth.write
+  # OID donnés à titre indicatif (entreprise Huawei = 1.3.6.1.4.1.2011) : À CONFIRMER
+  # avec la MIB HUAWEI-STORAGE / eDME de la version déployée. Endpoint et credentials
+  # SNMPv3 fournis via le vault (jamais en clair dans l'inventaire).
+  snmp/backup_array:
+    collection_interval: 60s
+    endpoint: "udp://{{ vault_backup_snmp_endpoint }}:161"
+    version: v3
+    security_level: auth_priv
+    user: "{{ vault_backup_snmp_user }}"
+    auth_type: "SHA"
+    auth_password: "{{ vault_backup_snmp_auth_password }}"
+    privacy_type: "AES"
+    privacy_password: "{{ vault_backup_snmp_priv_password }}"
+    resource_attributes:
+      backup.array.name:
+        oid: "1.3.6.1.4.1.2011.2.91.10.2.1.1.2"   # nom de la baie (indicatif)
+    metrics:
+      # --- Débit réseau (utilisation de la bande passante inter-zone / inter-région) ---
+      network.inter_zone.bandwidth_utilization:
+        unit: "%"
+        gauge:
+          value_type: double
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.91.20.1.1.1"   # BP inter-zone % (indicatif — à mapper MIB)
+      network.inter_region.bandwidth_utilization:
+        unit: "%"
+        gauge:
+          value_type: double
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.91.20.1.1.2"   # BP inter-région % (indicatif — à mapper MIB)
+      # --- Stockage baie ---
+      disk.space.utilization:
+        unit: "%"
+        gauge:
+          value_type: double
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.91.10.2.2.1.5"   # taux d'occupation disque % (indicatif)
+      storage.array.iops:
+        unit: "{operations}/s"
+        gauge:
+          value_type: double
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.91.10.2.3.1.1"   # IOPS agrégées (indicatif)
+      storage.array.bandwidth.read:
+        unit: "By/s"
+        gauge:
+          value_type: double
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.91.10.2.3.1.2"   # débit lecture (indicatif)
+      storage.array.bandwidth.write:
+        unit: "By/s"
+        gauge:
+          value_type: double
+        scalar_oids:
+          - oid: "1.3.6.1.4.1.2011.2.91.10.2.3.1.3"   # débit écriture (indicatif)
+
+  # ===================================================================================
+  # 2) SYSLOG — Logs solution de sauvegarde + Disaster Recovery (détection sécurité)
+  # ===================================================================================
+  # Source (Besoin_securité.xlsx) : "Logs de la solution de backup" +
+  # "Logs des solutions de disaster recovery" — émis en syslog vers l'agent.
+  # Écoute TCP sur 0.0.0.0:5517 (RFC5424). Une variante UDP est possible en remplaçant
+  # le bloc `tcp:` par `udp:` si l'émetteur ne supporte pas TCP.
+  #
+  # Détections attendues (majoritairement MITRE ATT&CK -> log.category=security) :
+  #   - suppression de jobs de sauvegarde            (Impact / Inhibit Recovery)
+  #   - modification des credentials des repos        (Credential Access / Persistence)
+  #   - échecs de connexion répétés sur la console    (Brute Force)
+  #   - connexions admin depuis IP inhabituelles      (Valid Accounts anormaux)
+  #   - chiffrement / verrouillage soudain des backups (Ransomware — Data Encrypted for Impact)
+  #   - désactivation des notifications / alertes      (Impair Defenses)
+  #   - montée de privilèges                           (Privilege Escalation)
+  #   - modification / suppression des logs (Veeam...) (Indicator Removal)
+  #   - exfiltration via export                         (Exfiltration)
+  #   - modification des VPG Zerto                      (Inhibit Recovery)
+  #   - dégradation du journaling de réplication        (Impact / DR)
+  #
+  # Cas d'audit conformité : backup.unprotected_clients (clients sans politique de
+  # sauvegarde) -> re-tagué log.category=audit via le routeur ci-dessous.
+  syslog/backup:
+    protocol: rfc5424
+    tcp:
+      listen_address: "0.0.0.0:5517"
+    operators:
+      # Routage catégorie : par défaut sécurité (détection MITRE), sauf les événements
+      # "client non protégé" qui relèvent de l'audit de conformité.
+      - type: router
+        id: backup_category_router
+        default:
+          - tag_security
+        routes:
+          - expr: 'body matches "(?i)(unprotected|not[ _-]?protected|sans politique de sauvegarde|no backup policy)"'
+            output: tag_audit
+      - type: add
+        id: tag_audit
+        field: resource["log.category"]
+        value: "audit"
+        output: end_backup_ops
+      - type: add
+        id: tag_security
+        field: resource["log.category"]
+        value: "security"
+        output: end_backup_ops
+      - type: noop
+        id: end_backup_ops
+
+  # ===================================================================================
+  # 3) API OceanProtect — Métriques métier backup (TODO : exporter Prometheus à fournir)
+  # ===================================================================================
+  # Besoins couverts (BackupRestore) :
+  #   backup.daily.volume.raw, backup.daily.volume.processed,
+  #   backup.client.success_rate (Critique), backup.missing_job_alert (Critique),
+  #   backup.client.capacity_drift, backup.client.duration_drift
+  #
+  # OceanProtect n'expose qu'une API propriétaire (REST/eDME) : il n'existe PAS de
+  # receiver OTel natif pour cette API et aucun endpoint Prometheus n'est disponible
+  # en l'état. => Receiver LAISSÉ EN COMMENTAIRE. Pour l'activer, fournir un exporter
+  # (side-car qui interroge l'API OceanProtect et expose /metrics), puis dé-commenter,
+  # renseigner le endpoint, et ajouter "prometheus/oceanprotect" à
+  # otel_profile_metrics_receivers ci-dessous.
+  #
+  # prometheus/oceanprotect:
+  #   config:
+  #     scrape_configs:
+  #       - job_name: oceanprotect-backup
+  #         scrape_interval: 60s
+  #         metrics_path: /metrics
+  #         static_configs:
+  #           - targets: ["{{ vault_backup_oceanprotect_exporter_endpoint }}"]
+  #         # Métriques attendues (exposées par l'exporter) :
+  #         #   backup_daily_volume_raw_bytes, backup_daily_volume_processed_bytes,
+  #         #   backup_client_success_rate, backup_missing_job_alert,
+  #         #   backup_client_capacity_drift, backup_client_duration_drift
+
+# -------------------------------------------------------------------------------------
+# Branchement des receivers sur les pipelines du collector.
+# -------------------------------------------------------------------------------------
+otel_profile_metrics_receivers:
+  - snmp/backup_array
+  # - prometheus/oceanprotect   # TODO : activer quand l'exporter API OceanProtect est disponible
+
+otel_profile_logs_receivers:
+  - syslog/backup
+
+otel_profile_traces_receivers: []
+
+# Port d'écoute syslog à ouvrir sur le pare-feu de la VM agent.
+otel_profile_firewall_ports:
+  - {port: 5517, proto: tcp}   # syslog/backup (détection MITRE : ransomware, suppression jobs…)

@@ -1,4 +1,8 @@
 ---
+- name: Charger le profil d'équipe (receivers/logs métier — Besoins détaillé.xlsx)
+  ansible.builtin.include_vars: "{{ role_path }}/profiles/{{ otel_profile }}.yaml"
+  when: otel_profile is defined and (otel_profile | length > 0)
+
 - name: Installer l'agent (Debian/Ubuntu)
   ansible.builtin.include_tasks: install-debian.yaml
   when: ansible_facts['os_family'] == "Debian"
@@ -27,6 +31,23 @@
   when: ansible_facts['system'] == "Linux"
   notify: Redémarrer otelcol (Linux)
 
+- name: Créer le répertoire du drop-in systemd (Linux)
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ otel_service_name_linux }}.service.d"
+    state: directory
+    mode: "0755"
+  become: true
+  when: ansible_facts['system'] == "Linux"
+
+- name: Déployer le drop-in systemd otelcol (Linux)
+  ansible.builtin.template:
+    src: override.conf.j2
+    dest: "/etc/systemd/system/{{ otel_service_name_linux }}.service.d/override.conf"
+    mode: "0644"
+  become: true
+  when: ansible_facts['system'] == "Linux"
+  notify: Redémarrer otelcol (Linux)
+
 - name: Générer la configuration OTel (Linux)
   ansible.builtin.template:
     src: config.yaml.j2
@@ -44,3 +65,7 @@
     dest: "{{ otel_config_path_windows }}"
   when: ansible_facts['os_family'] == "Windows"
   notify: Redémarrer otelcol (Windows)
+
+- name: Ouvrir les ports du receiver OTLP sur le pare-feu
+  ansible.builtin.include_tasks: firewall.yaml
+  when: otel_open_firewall | bool
