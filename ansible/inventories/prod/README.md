@@ -64,3 +64,23 @@ config de l'agent (il faudrait redéployer à chaque rotation). Elle est résolu
 au moment de l'alerte (Alertmanager → OneUptime/Opsgenie, via `oncall.team`) ou à
 l'affichage Grafana. L'agent porte le pointeur (`oncall.team`, `oncall.schedule_url`),
 pas l'état vivant.
+
+## Mise en service d'un environnement (checklist)
+
+Les 4 inventaires (`_template`, `dev`, `staging`, `prod`) partagent cette structure. Pour
+activer un environnement, il ne reste que de la donnée à renseigner (pas de code) :
+
+1. **Assigner les hôtes** à leur équipe dans `hosts.yaml` : placer chaque VM dans le groupe
+   `team_<équipe>` correspondant (en plus de son groupe OS). C'est ce qui déclenche le profil
+   de collecte métier (`otel_profile`).
+2. **Endpoints** dans `group_vars/team_<équipe>.yaml` : renseigner les cibles non-secrètes du
+   profil (hôtes SNMP, cibles Prometheus, chemins de logs, endpoints /metrics…).
+3. **Secrets** dans `group_vars/all/vault.yaml` : remplacer les placeholders, puis **chiffrer** :
+   `sops --encrypt --in-place group_vars/all/vault.yaml`.
+4. **CMDB** dans `host_vars/<hôte>.yaml` : renseigner `otel_cmdb_attributes` (ou brancher la
+   synchronisation depuis l'API CMDB — cf. section ci-dessus).
+5. **Déployer** : `ansible-playbook -i inventories/<env>/hosts.yaml playbooks/install-agent.yaml`
+   (ou `configure-agent.yaml` pour re-configurer sans réinstaller).
+
+Contrat de profil, ajout d'une nouvelle équipe et référence des variables :
+`roles/otel-agent/README.md`.
